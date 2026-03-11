@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: sistema-hotel-api
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 24h
+      - key: FRONTEND_URL
+        value: https://hotel-frontend-xi-five.vercel.app/
