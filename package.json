@@ -1,7 +1,7 @@
 {
   "name": "hotel-backend",
   "version": "1.0.0",
-  "description": "API do sistema de contas a pagar e receber",
+  "description": "API do sistema de hotelaria",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
@@ -14,7 +14,7 @@
     "node",
     "express"
   ],
-  "author": "Seu Nome",
+  "author": "PTNA",
   "license": "ISC",
   "dependencies": {
     "bcryptjs": "^2.4.3",
