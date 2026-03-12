@@ -228,7 +228,7 @@ exports.testEmail = async (req, res) => {
     try {
         await transporter.sendMail({
             from: process.env.EMAIL_USER,
-            to: 'seu-email@gmail.com', // Seu email para teste
+            to: 'ptarsonevesytb@gmail.com', // Seu email para teste
             subject: 'Teste',
             text: 'Funcionou!'
         });
