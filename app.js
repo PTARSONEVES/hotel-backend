@@ -39,6 +39,26 @@ app.use(cors({
 
 app.use(express.json());
 
+// Rota de teste do banco de dados (coloque antes das outras rotas)
+app.get('/api/test-db', async (req, res) => {
+    try {
+        const pool = require('./config/database');
+        const [result] = await pool.query('SELECT 1 as test');
+        const [tables] = await pool.query('SHOW TABLES');
+        res.json({ 
+            success: true, 
+            database: process.env.DB_NAME || 'sistema_financeiro',
+            tables: tables.map(t => Object.values(t)[0])
+        });
+    } catch (error) {
+        console.error('❌ Erro no test-db:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
 // Rota de teste
 app.get('/api/health', (req, res) => {
     res.json({ 
