@@ -9,9 +9,15 @@ const hotelRoutes = require('./modules/hotel/routes/hotelRoutes');
 
 const app = express();
 
+const allowedOrigins = [
+    'http://localhost:5173',
+    'https://seu-frontend.vercel.app', // Substitua pelo seu domínio
+    'https://sistema-hotel-api.onrender.com'
+]
+
 // Configuração CORS mais permissiva para desenvolvimento
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:3001', 'http://127.0.0.1:5173', 'https://hotel-frontend-xi-five.vercel.app'],
+    origin: allowedOrigins,
     credentials: true
 }));
 
