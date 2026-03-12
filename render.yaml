@@ -14,4 +14,4 @@ services:
       - key: JWT_EXPIRES_IN
         value: 24h
       - key: FRONTEND_URL
-        value: https://hotel-frontend-xi-five.vercel.app/
+        value: https://hotel-frontend-xi-five.vercel.app
