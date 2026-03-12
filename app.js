@@ -24,7 +24,6 @@ app.use(cors({
     origin: function(origin, callback) {
         // Permitir requisições sem origin (como apps mobile)
         if (!origin) return callback(null, true);
-        
         if (allowedOrigins.indexOf(origin) === -1) {
             const msg = 'A política CORS para este site não permite acesso da origem: ' + origin;
             console.log('🚫 Bloqueado:', origin);
@@ -72,10 +71,6 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/accounts', accountRoutes);
 app.use('/api/hotel', hotelRoutes);
-// Rota de teste
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'OK', message: 'Servidor funcionando!' });
-});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

@@ -12,10 +12,12 @@ const transporter = nodemailer.createTransport({
     }
 });
 
+console.log(transporter);
 // Solicitar recuperação de senha
 exports.forgotPassword = async (req, res) => {
     try {
         const { email } = req.body;
+        console.log('📧 Solicitação de recuperação para:', email);
 
         // Verificar se usuário existe
         const [users] = await pool.query(
@@ -34,7 +36,7 @@ exports.forgotPassword = async (req, res) => {
 
         // Gerar token único
         const token = crypto.randomBytes(32).toString('hex');
-        
+
         // Token expira em 1 hora
         const expiresAt = new Date(Date.now() + 3600000);
 
@@ -52,6 +54,8 @@ exports.forgotPassword = async (req, res) => {
 
         // Criar link de recuperação
         const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
+        console.log('📧 Link gerado:', resetLink);
+        console.log('📧 Enviando email para:', user.email);
 
         // Enviar email
         const mailOptions = {
@@ -82,14 +86,15 @@ exports.forgotPassword = async (req, res) => {
         };
 
         await transporter.sendMail(mailOptions);
+console.log('✅ Email enviado com sucesso');
 
-        res.json({ 
+res.json({ 
             message: 'Se o email existir, você receberá instruções de recuperação' 
         });
 
     } catch (error) {
-        console.error('Erro no forgot password:', error);
-        res.status(500).json({ error: 'Erro ao processar solicitação' });
+        console.error('❌ Erro detalhado:', error);
+        res.status(500).json({ error: error.message });
     }
 };
 
@@ -213,5 +218,23 @@ exports.changePassword = async (req, res) => {
     } catch (error) {
         console.error('Erro ao alterar senha:', error);
         res.status(500).json({ error: 'Erro ao alterar senha' });
+    }
+};
+
+// Adicione este teste temporário no final do passwordController.js
+
+// Teste rápido de email (remova depois)
+exports.testEmail = async (req, res) => {
+    try {
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: 'seu-email@gmail.com', // Seu email para teste
+            subject: 'Teste',
+            text: 'Funcionou!'
+        });
+        res.json({ message: 'Email enviado' });
+    } catch (error) {
+        console.error('Erro no teste:', error);
+        res.status(500).json({ error: error.message });
     }
 };

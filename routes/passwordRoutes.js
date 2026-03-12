@@ -7,7 +7,7 @@ const authMiddleware = require('../middleware/auth');
 router.post('/forgot', passwordController.forgotPassword);
 router.get('/verify/:token', passwordController.verifyToken);
 router.post('/reset', passwordController.resetPassword);
-
+router.get('/test-email', passwordController.testEmail);
 // Rota protegida (usuário logado)
 router.post('/change', authMiddleware, passwordController.changePassword);
 
