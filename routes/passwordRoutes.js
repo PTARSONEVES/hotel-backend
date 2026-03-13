@@ -19,7 +19,7 @@ router.get('/test-email', async (req, res) => {
             from: process.env.EMAIL_USER,
             to: 'seu-email@gmail.com', // Coloque seu email aqui para teste
             subject: 'Teste de Configuração',
-            text: 'Se você recebeu este email, a configuração está funcionando!'
+            text: 'Se você recebeu este email, então a configuração está funcionando!'
         });
 
         res.json({ message: '✅ Email enviado com sucesso!' });
