@@ -38,6 +38,12 @@ app.use(cors({
 
 app.use(express.json());
 
+
+// Adicione isso ANTES das outras rotas no app.js
+app.get('/api/ping', (req, res) => {
+    res.json({ message: 'pong', timestamp: new Date() });
+});
+
 // Rota de teste do banco de dados (coloque antes das outras rotas)
 app.get('/api/test-db', async (req, res) => {
     try {
