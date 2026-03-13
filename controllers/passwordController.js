@@ -220,21 +220,3 @@ exports.changePassword = async (req, res) => {
         res.status(500).json({ error: 'Erro ao alterar senha' });
     }
 };
-
-// Adicione este teste temporário no final do passwordController.js
-
-// Teste rápido de email (remova depois)
-exports.testEmail = async (req, res) => {
-    try {
-        await transporter.sendMail({
-            from: process.env.EMAIL_USER,
-            to: 'ptarsonevesytb@gmail.com', // Seu email para teste
-            subject: 'Teste',
-            text: 'Funcionou!'
-        });
-        res.json({ message: 'Email enviado' });
-    } catch (error) {
-        console.error('Erro no teste:', error);
-        res.status(500).json({ error: error.message });
-    }
-};

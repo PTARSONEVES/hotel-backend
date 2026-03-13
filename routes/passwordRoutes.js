@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const passwordController = require('../controllers/passwordController');
 const authMiddleware = require('../middleware/auth');
+const nodemailer = require('nodemailer');
 
 // Rota de teste de email (remova depois)
 router.get('/test-email', async (req, res) => {
