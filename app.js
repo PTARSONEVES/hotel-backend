@@ -1,70 +1,84 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 require('dotenv').config();
-
-const authRoutes = require('./routes/authRoutes');
-const accountRoutes = require('./routes/accountRoutes');
-// Importar módulo do hotel
-const hotelRoutes = require('./modules/hotel/routes/hotelRoutes');
 
 const app = express();
 
+// Configuração CORS (já existente)
 const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:3000',
-    'https://hotel-frontend-xi-five.vercel.app', // Substitua pelo seu domínio
-    'https://sistema-hotel-api.onrender.com',
-    process.env.FRONTEND_URL
-].filter(Boolean); // Remove undefined
+    'https://hotel-frontend-xi-five.vercel.app',
+    'https://sistema-hotel-api.onrender.com'
+];
 
-console.log('🔧 CORS permitido para:', allowedOrigins);
-
-// Configuração CORS mais permissiva para desenvolvimento
 app.use(cors({
-    origin: function(origin, callback) {
-        // Permitir requisições sem origin (como apps mobile)
-        if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) === -1) {
-            const msg = 'A política CORS para este site não permite acesso da origem: ' + origin;
-            console.log('🚫 Bloqueado:', origin);
-            return callback(new Error(msg), false);
-        }
-        console.log('✅ Permitido:', origin);
-        return callback(null, true);
-    },
-    credentials: true,
-    optionsSuccessStatus: 200
+    origin: allowedOrigins,
+    credentials: true
 }));
 
 app.use(express.json());
 
-
-// Adicione isso ANTES das outras rotas no app.js
-app.get('/api/ping', (req, res) => {
-    res.json({ message: 'pong', timestamp: new Date() });
-});
-
-// Rota de teste do banco de dados (coloque antes das outras rotas)
-app.get('/api/test-db', async (req, res) => {
+// =====================================================
+// ROTA DE TESTE DIRETA (SEM DEPENDER DE OUTROS ARQUIVOS)
+// =====================================================
+app.get('/api/password/test-email', async (req, res) => {
     try {
-        const pool = require('./config/database');
-        const [result] = await pool.query('SELECT 1 as test');
-        const [tables] = await pool.query('SHOW TABLES');
+        console.log('📧 Rota de teste acessada!');
+        console.log('📧 EMAIL_USER:', process.env.EMAIL_USER);
+        console.log('📧 EMAIL_PASS definida:', process.env.EMAIL_PASS ? 'Sim' : 'Não');
+        
+        const nodemailer = require('nodemailer');
+        
+        const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS
+            }
+        });
+
+        const info = await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: process.env.EMAIL_USER, // Envia para si mesmo
+            subject: 'Teste Direto - Sistema Financeiro',
+            text: 'Se você recebeu este email, a configuração está funcionando!',
+            html: '<h1>Teste Direto</h1><p>Configuração de email OK!</p>'
+        });
+
+        console.log('✅ Email enviado! ID:', info.messageId);
         res.json({ 
             success: true, 
-            database: process.env.DB_NAME || 'sistema_financeiro',
-            tables: tables.map(t => Object.values(t)[0])
+            message: 'Email enviado com sucesso!',
+            messageId: info.messageId
         });
+
     } catch (error) {
-        console.error('❌ Erro no test-db:', error);
+        console.error('❌ Erro detalhado:', error);
         res.status(500).json({ 
             success: false, 
-            error: error.message 
+            error: error.message,
+            code: error.code,
+            response: error.response
         });
     }
 });
 
-// Rota de teste
+// =====================================================
+// SUAS ROTAS EXISTENTES
+// =====================================================
+const authRoutes = require('./routes/authRoutes');
+const accountRoutes = require('./routes/accountRoutes');
+const passwordRoutes = require('./routes/passwordRoutes');
+const hotelRoutes = require('./modules/hotel/routes/hotelRoutes');
+
+app.use('/api/auth', authRoutes);
+app.use('/api/accounts', accountRoutes);
+app.use('/api/password', passwordRoutes);
+app.use('/api/hotel', hotelRoutes);
+
+// Rota de saúde
 app.get('/api/health', (req, res) => {
     res.json({ 
         status: 'OK', 
@@ -73,10 +87,10 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Rotas
-app.use('/api/auth', authRoutes);
-app.use('/api/accounts', accountRoutes);
-app.use('/api/hotel', hotelRoutes);
+// Rota ping (já existente)
+app.get('/api/ping', (req, res) => {
+    res.json({ message: 'pong', timestamp: new Date() });
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
