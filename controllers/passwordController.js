@@ -61,7 +61,7 @@ exports.forgotPassword = async (req, res) => {
         const mailOptions = {
             from: process.env.EMAIL_USER,
             to: user.email,
-            subject: 'Recuperação de Senha - Sistema Financeiro',
+            subject: 'Recuperação de Senha - Ancorar Flat Resort',
             html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                     <h2 style="color: #2563eb;">Recuperação de Senha</h2>

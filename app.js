@@ -28,13 +28,15 @@ app.get('/api/password/test-email', async (req, res) => {
         console.log('📧 Rota de teste acessada!');
         console.log('📧 EMAIL_USER:', process.env.EMAIL_USER);
         console.log('📧 EMAIL_PASS definida:', process.env.EMAIL_PASS ? 'Sim' : 'Não');
-        
+
+        console.log('📧 SENDGRID_API_KEY definida:', process.env.SENDGRID_API_KEY ? 'Sim' : 'Não');
         const nodemailer = require('nodemailer');
-        
+
         const transporter = nodemailer.createTransport({
             service: 'gmail',
             auth: {
                 user: process.env.EMAIL_USER,
+//                pass: process.env.SENDGRID_API_KEY 
                 pass: process.env.EMAIL_PASS
             }
         });
