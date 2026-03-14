@@ -1,19 +1,103 @@
 const pool = require('../config/database');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 
-// Configurar transporte de email (exemplo com Gmail)
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+// Configurar SendGrid com a API Key
+if (process.env.SENDGRID_API_KEY) {
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    console.log('✅ SendGrid configurado com API Key');
+} else {
+    console.warn('⚠️ SENDGRID_API_KEY não configurada');
+}
+
+// =====================================================
+// FUNÇÃO AUXILIAR PARA ENVIO DE EMAIL
+// =====================================================
+const sendEmail = async (to, subject, htmlContent) => {
+    try {
+        const msg = {
+            to,
+            from: process.env.SENDGRID_FROM_EMAIL || 'reservas.ancorarporto@gmail.com',
+            subject,
+            html: htmlContent
+        };
+
+        const response = await sgMail.send(msg);
+        console.log(`✅ Email enviado para ${to}, ID:`, response[0]?.headers['x-message-id']);
+        return { success: true, messageId: response[0]?.headers['x-message-id'] };
+    } catch (error) {
+        console.error('❌ Erro no SendGrid:', error.response?.body || error.message);
+        
+        // Log detalhado para diagnóstico
+        if (error.response) {
+            console.error('Detalhes do erro:', {
+                statusCode: error.code,
+                body: error.response.body
+            });
+        }
+        
+        return { 
+            success: false, 
+            error: error.response?.body?.errors?.[0]?.message || error.message 
+        };
     }
-});
+};
 
-console.log(transporter);
-// Solicitar recuperação de senha
+// =====================================================
+// ROTA DE TESTE DO SENDGRID
+// =====================================================
+exports.testSendGrid = async (req, res) => {
+    try {
+        console.log('📧 Testando SendGrid...');
+        console.log('📧 FROM_EMAIL:', process.env.SENDGRID_FROM_EMAIL);
+        console.log('📧 API_KEY configurada:', process.env.SENDGRID_API_KEY ? 'Sim' : 'Não');
+
+        const result = await sendEmail(
+            process.env.SENDGRID_FROM_EMAIL, // Envia para si mesmo
+            'Teste SendGrid - Sistema Financeiro',
+            `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px;">
+                <h2 style="color: #2563eb; text-align: center;">Teste de Configuração</h2>
+                <p style="font-size: 16px;">Olá! 👋</p>
+                <p style="font-size: 16px;">Se você está vendo este email, a integração com SendGrid está <strong style="color: #10b981;">funcionando perfeitamente</strong>!</p>
+                <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                    <p style="margin: 5px 0;"><strong>Configuração:</strong></p>
+                    <p style="margin: 5px 0;">✅ SendGrid API Key: Configurada</p>
+                    <p style="margin: 5px 0;">✅ Remetente: ${process.env.SENDGRID_FROM_EMAIL}</p>
+                    <p style="margin: 5px 0;">✅ Horário: ${new Date().toLocaleString('pt-BR')}</p>
+                </div>
+                <p style="color: #6b7280; font-size: 14px; text-align: center;">
+                    Este é um email automático de teste do seu Sistema Financeiro.
+                </p>
+            </div>
+            `
+        );
+
+        if (result.success) {
+            res.json({ 
+                success: true, 
+                message: 'Email de teste enviado com sucesso!',
+                messageId: result.messageId
+            });
+        } else {
+            res.status(500).json({ 
+                success: false, 
+                error: result.error 
+            });
+        }
+    } catch (error) {
+        console.error('❌ Erro no teste:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+};
+
+// =====================================================
+// SOLICITAR RECUPERAÇÃO DE SENHA (FORGOT PASSWORD)
+// =====================================================
 exports.forgotPassword = async (req, res) => {
     try {
         const { email } = req.body;
@@ -55,50 +139,71 @@ exports.forgotPassword = async (req, res) => {
         // Criar link de recuperação
         const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
         console.log('📧 Link gerado:', resetLink);
-        console.log('📧 Enviando email para:', user.email);
 
-        // Enviar email
-        const mailOptions = {
-            from: process.env.EMAIL_USER,
-            to: user.email,
-            subject: 'Recuperação de Senha - Ancorar Flat Resort',
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h2 style="color: #2563eb;">Recuperação de Senha</h2>
-                    <p>Olá, <strong>${user.name}</strong>!</p>
-                    <p>Recebemos uma solicitação para redefinir sua senha.</p>
-                    <p>Clique no botão abaixo para criar uma nova senha:</p>
-                    <div style="text-align: center; margin: 30px 0;">
-                        <a href="${resetLink}" 
-                           style="background-color: #2563eb; color: white; padding: 12px 24px; 
-                                  text-decoration: none; border-radius: 5px; font-weight: bold;">
-                            Redefinir Senha
-                        </a>
-                    </div>
-                    <p>Se você não solicitou esta recuperação, ignore este email.</p>
-                    <p>Este link expira em <strong>1 hora</strong>.</p>
-                    <hr>
-                    <p style="color: #666; font-size: 12px;">
-                        Sistema Financeiro - Gerenciamento de Contas
-                    </p>
+        // Template do email
+        const htmlContent = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px;">
+                <h2 style="color: #2563eb; text-align: center;">Recuperação de Senha</h2>
+                
+                <p style="font-size: 16px;">Olá, <strong>${user.name}</strong>!</p>
+                
+                <p style="font-size: 16px;">Recebemos uma solicitação para redefinir sua senha no <strong>Sistema Financeiro</strong>.</p>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="${resetLink}" 
+                       style="background-color: #2563eb; color: white; padding: 14px 28px; 
+                              text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;
+                              display: inline-block;">
+                        🔐 Redefinir Minha Senha
+                    </a>
                 </div>
-            `
-        };
+                
+                <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
+                    ⏰ Este link é válido por <strong>1 hora</strong>.
+                </p>
+                
+                <hr style="border: none; border-top: 1px solid #eaeaea; margin: 20px 0;">
+                
+                <p style="color: #9ca3af; font-size: 13px; text-align: center;">
+                    Se você não solicitou esta recuperação, ignore este email.<br>
+                    Sua senha permanecerá a mesma.
+                </p>
+                
+                <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 20px;">
+                    Sistema Financeiro - Gerenciamento de Contas<br>
+                    © ${new Date().getFullYear()} - Todos os direitos reservados
+                </p>
+            </div>
+        `;
 
-        await transporter.sendMail(mailOptions);
-console.log('✅ Email enviado com sucesso');
+        // Enviar email via SendGrid
+        const result = await sendEmail(
+            user.email,
+            '🔐 Recuperação de Senha - Sistema Financeiro',
+            htmlContent
+        );
 
-res.json({ 
-            message: 'Se o email existir, você receberá instruções de recuperação' 
-        });
+        if (result.success) {
+            console.log('✅ Email de recuperação enviado para:', user.email);
+            res.json({ 
+                message: 'Se o email existir, você receberá instruções de recuperação' 
+            });
+        } else {
+            console.error('❌ Falha no envio do email:', result.error);
+            res.status(500).json({ 
+                error: 'Erro ao enviar email de recuperação. Tente novamente mais tarde.' 
+            });
+        }
 
     } catch (error) {
-        console.error('❌ Erro detalhado:', error);
-        res.status(500).json({ error: error.message });
+        console.error('❌ Erro no forgot password:', error);
+        res.status(500).json({ error: 'Erro ao processar solicitação' });
     }
 };
 
-// Verificar token
+// =====================================================
+// VERIFICAR TOKEN
+// =====================================================
 exports.verifyToken = async (req, res) => {
     try {
         const { token } = req.params;
@@ -123,7 +228,9 @@ exports.verifyToken = async (req, res) => {
     }
 };
 
-// Redefinir senha
+// =====================================================
+// REDEFINIR SENHA
+// =====================================================
 exports.resetPassword = async (req, res) => {
     try {
         const { token, password } = req.body;
@@ -177,7 +284,9 @@ exports.resetPassword = async (req, res) => {
     }
 };
 
-// Alterar senha (usuário logado)
+// =====================================================
+// ALTERAR SENHA (USUÁRIO LOGADO)
+// =====================================================
 exports.changePassword = async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
