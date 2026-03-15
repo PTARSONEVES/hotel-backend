@@ -54,7 +54,8 @@ exports.testSendGrid = async (req, res) => {
         console.log('📧 API_KEY configurada:', process.env.SENDGRID_API_KEY ? 'Sim' : 'Não');
 
         const result = await sendEmail(
-            process.env.SENDGRID_FROM_EMAIL, // Envia para si mesmo
+            'ptarsoneves@gmail.com',
+//            process.env.SENDGRID_FROM_EMAIL, // Envia para si mesmo
             'Teste SendGrid - Sistema Financeiro',
             `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px;">
