@@ -98,3 +98,6 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT}`);
 });// Forçando rebuild no Render - 03/13/2026 16:08:41
+
+// Iniciar cron jobs
+require('./cron/alerts');

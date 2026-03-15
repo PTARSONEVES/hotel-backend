@@ -5,6 +5,7 @@ const roomTypeController = require('../controllers/roomTypeController');
 const roomController = require('../controllers/roomController');
 const guestController = require('../controllers/guestController');
 const bookingController = require('../controllers/bookingController');
+const alertController = require('../controllers/alertController');
 const consumptionController = require('../controllers/consumptionController');
 const reportController = require('../controllers/reportController');
 
@@ -66,15 +67,21 @@ router.delete('/guests/:id', guestController.deleteGuest);
 // =====================================================
 // ROTAS DE RESERVAS
 // =====================================================
-router.get('/bookings', bookingController.getBookings);
-router.get('/bookings/availability', bookingController.checkAvailability);
-router.get('/bookings/:id', bookingController.getBookingById);
+//router.get('/bookings', bookingController.getBookings);
+//router.get('/bookings/availability', bookingController.checkAvailability);
+//router.get('/bookings/:id', bookingController.getBookingById);
+//router.post('/bookings', bookingController.createBooking);
+//router.post('/bookings/:id/checkin', bookingController.checkIn);
+//router.post('/bookings/:id/checkout', bookingController.checkOut);
+//router.post('/bookings/:id/cancel', bookingController.cancelBooking);
+//router.post('/bookings/:id/consumption', bookingController.addConsumption);
+//router.post('/bookings', bookingController.createBooking);
+// =====================================================
+// ROTAS DE RESERVAS (ATUALIZADAS)
+// =====================================================
 router.post('/bookings', bookingController.createBooking);
-router.post('/bookings/:id/checkin', bookingController.checkIn);
-router.post('/bookings/:id/checkout', bookingController.checkOut);
-router.post('/bookings/:id/cancel', bookingController.cancelBooking);
-router.post('/bookings/:id/consumption', bookingController.addConsumption);
-
+router.get('/bookings/:booking_id/installments', bookingController.getBookingInstallments);
+router.post('/installments/:installment_id/pay', bookingController.payInstallment);
 // =====================================================
 // ROTAS DE CONSUMO E ESTOQUE
 // =====================================================
@@ -94,5 +101,11 @@ router.get('/reports/occupancy', reportController.occupancyReport);
 router.get('/reports/consumption', reportController.consumptionReport);
 router.get('/reports/financial', reportController.financialReport);
 router.get('/reports/executive-dashboard', reportController.executiveDashboard);
+// =====================================================
+// ROTAS DE ALERTAS
+// =====================================================
+router.get('/alerts', alertController.getActiveAlerts);
+router.post('/alerts/generate', alertController.generateAllAlerts);
+router.post('/alerts/:id/resolve', alertController.resolveAlert);
 
 module.exports = router;
