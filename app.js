@@ -8,7 +8,8 @@ const app = express();
 // Configuração CORS (já existente)
 const allowedOrigins = [
     'http://localhost:5173',
-    'http://localhost:3000',
+    'https://www.ancorarportodegalinhas.com',
+    'https://ancorarportodegalinhas.com',
     'https://hotel-frontend-xi-five.vercel.app',
     'https://sistema-hotel-api.onrender.com'
 ];
