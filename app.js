@@ -21,52 +21,6 @@ app.use(cors({
 
 app.use(express.json());
 
-// =====================================================
-// ROTA DE TESTE DIRETA (SEM DEPENDER DE OUTROS ARQUIVOS)
-// =====================================================
-app.get('/api/password/test-email', async (req, res) => {
-    try {
-        console.log('📧 Rota de teste acessada!');
-        console.log('📧 EMAIL_USER:', process.env.EMAIL_USER);
-        console.log('📧 EMAIL_PASS definida:', process.env.EMAIL_PASS ? 'Sim' : 'Não');
-
-        console.log('📧 SENDGRID_API_KEY definida:', process.env.SENDGRID_API_KEY ? 'Sim' : 'Não');
-        const nodemailer = require('nodemailer');
-
-        const transporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-                user: process.env.EMAIL_USER,
-//                pass: process.env.SENDGRID_API_KEY 
-                pass: process.env.EMAIL_PASS
-            }
-        });
-
-        const info = await transporter.sendMail({
-            from: process.env.EMAIL_USER,
-            to: process.env.EMAIL_USER, // Envia para si mesmo
-            subject: 'Teste Direto - Sistema Financeiro',
-            text: 'Se você recebeu este email, a configuração está funcionando!',
-            html: '<h1>Teste Direto</h1><p>Configuração de email OK!</p>'
-        });
-
-        console.log('✅ Email enviado! ID:', info.messageId);
-        res.json({ 
-            success: true, 
-            message: 'Email enviado com sucesso!',
-            messageId: info.messageId
-        });
-
-    } catch (error) {
-        console.error('❌ Erro detalhado:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: error.message,
-            code: error.code,
-            response: error.response
-        });
-    }
-});
 
 // =====================================================
 // SUAS ROTAS EXISTENTES
@@ -75,12 +29,20 @@ const authRoutes = require('./routes/authRoutes');
 const accountRoutes = require('./routes/accountRoutes');
 const passwordRoutes = require('./routes/passwordRoutes');
 const hotelRoutes = require('./modules/hotel/routes/hotelRoutes');
+const publicRoutes = require('./routes/publicRoutes');
+const adminLeadRoutes = require('./routes/admin/leadRoutes');
+const userRoutes = require('./routes/admin/userRoutes');
 
+// Rotas públicas (ANTES do middleware de autenticação)
+app.use('/api/public', publicRoutes);
+// Rotas protegidas
 app.use('/api/auth', authRoutes);
 app.use('/api/accounts', accountRoutes);
 app.use('/api/password', passwordRoutes);
 app.use('/api/hotel', hotelRoutes);
-
+// Rotas de admin
+app.use('/api/admin', adminLeadRoutes);
+app.use('/api/users', userRoutes);
 // Rota de saúde
 app.get('/api/health', (req, res) => {
     res.json({ 
@@ -90,10 +52,6 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Rota ping (já existente)
-app.get('/api/ping', (req, res) => {
-    res.json({ message: 'pong', timestamp: new Date() });
-});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
