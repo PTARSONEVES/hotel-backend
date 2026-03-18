@@ -32,6 +32,8 @@ const hotelRoutes = require('./modules/hotel/routes/hotelRoutes');
 const publicRoutes = require('./routes/publicRoutes');
 const adminLeadRoutes = require('./routes/admin/leadRoutes');
 const userRoutes = require('./routes/admin/userRoutes');
+const financialRoutes = require('./routes/financialRoutes');
+const maintenanceRoutes = require('./modules/maintenance/routes/maintenanceRoutes');
 
 // Rotas públicas (ANTES do middleware de autenticação)
 app.use('/api/public', publicRoutes);
@@ -43,6 +45,8 @@ app.use('/api/hotel', hotelRoutes);
 // Rotas de admin
 app.use('/api/admin', adminLeadRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/financial', financialRoutes);
+app.use('/api/maintenance', maintenanceRoutes);
 // Rota de saúde
 app.get('/api/health', (req, res) => {
     res.json({ 
