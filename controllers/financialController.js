@@ -3,6 +3,7 @@ const pool = require('../config/database');
 // =====================================================
 // DASHBOARD FINANCEIRO - VERSÃO COMPLETA
 // =====================================================
+
 exports.getDashboard = async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
@@ -15,29 +16,27 @@ exports.getDashboard = async (req, res) => {
         const fim = endDate || hoje.toISOString().split('T')[0];
 
         // =====================================================
-        // 1. RESUMO DE CONTAS A RECEBER (da tabela accounts)
+        // 1. RESUMO DE CONTAS A RECEBER
         // =====================================================
         const [receivableSummary] = await pool.query(
             `SELECT 
-                COALESCE(SUM(CASE WHEN status = 'pago' THEN amount ELSE 0 END), 0) as recebido,
-                COALESCE(SUM(CASE WHEN status = 'pendente' THEN amount ELSE 0 END), 0) as a_receber
+                COALESCE(SUM(CASE WHEN due_date BETWEEN ? AND ? AND status = 'pago' THEN amount ELSE 0 END), 0) as recebido,
+                COALESCE(SUM(CASE WHEN due_date BETWEEN ? AND ? AND status = 'pendente' THEN amount ELSE 0 END), 0) as a_receber
              FROM accounts 
-             WHERE type = 'receber'
-             AND (payment_date BETWEEN ? AND ? OR due_date BETWEEN ? AND ?)`,
+             WHERE type = 'receber'`,
             [inicio, fim, inicio, fim]
         );
 
         // =====================================================
-        // 2. RESUMO DE CONTAS A PAGAR (da tabela bills)
+        // 2. RESUMO DE CONTAS A PAGAR
         // =====================================================
         let payableSummary = { pago: 0, a_pagar: 0 };
         try {
             const [result] = await pool.query(
                 `SELECT 
-                    COALESCE(SUM(CASE WHEN status = 'pago' THEN amount ELSE 0 END), 0) as pago,
-                    COALESCE(SUM(CASE WHEN status = 'pendente' THEN amount ELSE 0 END), 0) as a_pagar
-                 FROM bills 
-                 WHERE (payment_date BETWEEN ? AND ?) OR (due_date BETWEEN ? AND ?)`,
+                    COALESCE(SUM(CASE WHEN due_date BETWEEN ? AND ? AND status = 'pago' THEN amount ELSE 0 END), 0) as pago,
+                    COALESCE(SUM(CASE WHEN due_date BETWEEN ? AND ? AND status = 'pendente' THEN amount ELSE 0 END), 0) as a_pagar
+                 FROM bills`,
                 [inicio, fim, inicio, fim]
             );
             payableSummary = result[0];
@@ -56,10 +55,10 @@ exports.getDashboard = async (req, res) => {
              LEFT JOIN bookings b ON a.reference_id = b.id
              LEFT JOIN guests g ON b.guest_id = g.id
              LEFT JOIN rooms r ON b.room_id = r.id
-             WHERE a.type = 'receber' 
-             AND a.due_date BETWEEN ? AND ?
+             WHERE a.type = 'receber'
+               AND (a.due_date BETWEEN ? AND ? OR a.payment_date BETWEEN ? AND ?)
              ORDER BY a.due_date ASC`,
-            [inicio, fim]
+            [inicio, fim, inicio, fim]
         );
 
         // =====================================================
@@ -71,9 +70,9 @@ exports.getDashboard = async (req, res) => {
                 `SELECT b.*, ac.name as category_name
                  FROM bills b
                  LEFT JOIN account_categories ac ON b.category_id = ac.id
-                 WHERE b.due_date BETWEEN ? AND ?
+                 WHERE (b.due_date BETWEEN ? AND ? OR b.payment_date BETWEEN ? AND ?)
                  ORDER BY b.due_date ASC`,
-                [inicio, fim]
+                [inicio, fim, inicio, fim]
             );
             payables = bills;
         } catch (error) {
@@ -90,14 +89,16 @@ exports.getDashboard = async (req, res) => {
             a_pagar: parseFloat(payableSummary?.a_pagar || 0)
         };
 
-        // Calcular totais
+        // =====================================================
+        // 6. CÁLCULOS DOS INDICADORES
+        // =====================================================
         const totalReceitas = summary.recebido + summary.a_receber;
         const totalDespesas = summary.pago + summary.a_pagar;
         const saldoPeriodo = summary.recebido - summary.pago;
         const saldoPrevisto = (summary.a_receber - summary.a_pagar) + saldoPeriodo;
 
         // =====================================================
-        // 6. RECEITAS POR CATEGORIA
+        // 7. RECEITAS POR CATEGORIA
         // =====================================================
         let revenueByCategory = [];
         try {
@@ -117,7 +118,7 @@ exports.getDashboard = async (req, res) => {
         }
 
         // =====================================================
-        // 7. DESPESAS POR CATEGORIA
+        // 8. DESPESAS POR CATEGORIA
         // =====================================================
         let expensesByCategory = [];
         try {
@@ -136,8 +137,17 @@ exports.getDashboard = async (req, res) => {
         }
 
         // =====================================================
-        // 8. RESPOSTA FINAL
+        // 9. RESPOSTA FINAL
         // =====================================================
+        console.log('📊 Dashboard carregado:', {
+            recebido: summary.recebido,
+            a_receber: summary.a_receber,
+            pago: summary.pago,
+            a_pagar: summary.a_pagar,
+            receivables: receivables.length,
+            payables: payables.length
+        });
+
         res.json({
             summary,
             totalReceitas,
@@ -159,7 +169,6 @@ exports.getDashboard = async (req, res) => {
         });
     }
 };
-
 // =====================================================
 // CONTAS A RECEBER
 // =====================================================
