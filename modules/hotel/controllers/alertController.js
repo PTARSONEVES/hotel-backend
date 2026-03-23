@@ -157,14 +157,18 @@ exports.generateAllAlerts = async (req, res) => {
 };
 
 // =====================================================
-// BUSCAR ALERTAS ATIVOS
+// BUSCAR ALERTAS ATIVOS (CORRIGIDO)
 // =====================================================
 exports.getActiveAlerts = async (req, res) => {
     try {
         const [alerts] = await pool.query(
-            `SELECT a.*, b.guest_name, b.check_in, r.room_number
+            `SELECT a.*, 
+                    g.name as guest_name, 
+                    b.check_in, 
+                    r.room_number
              FROM alerts a
              JOIN bookings b ON a.booking_id = b.id
+             JOIN guests g ON b.guest_id = g.id
              JOIN rooms r ON b.room_id = r.id
              WHERE a.status = 'active'
              ORDER BY 
