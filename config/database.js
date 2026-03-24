@@ -6,7 +6,7 @@ let pool;
 if (process.env.NODE_ENV === 'production') {
     // Produção - Railway
     console.log('🔌 Conectando ao Railway...');
-    
+
     // Se tiver DATABASE_URL, usa ela
     if (process.env.DATABASE_URL) {
         pool = mysql.createPool(process.env.DATABASE_URL);
@@ -19,7 +19,7 @@ if (process.env.NODE_ENV === 'production') {
             password: process.env.DB_PASSWORD,
             database: process.env.DB_NAME,
             waitForConnections: true,
-            connectionLimit: 5,
+            connectionLimit: 10,
             queueLimit: 0,
             enableKeepAlive: true,
             keepAliveInitialDelay: 10000
