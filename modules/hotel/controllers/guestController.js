@@ -49,6 +49,29 @@ exports.getGuestById = async (req, res) => {
     }
 };
 
+// =====================================================
+// BUSCAR HÓSPEDE POR USER_ID
+// =====================================================
+exports.getGuestByUserId = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        const [guests] = await pool.query(
+            'SELECT * FROM guests WHERE user_id = ?',
+            [userId]
+        );
+        
+        if (guests.length === 0) {
+            return res.status(404).json({ error: 'Hóspede não encontrado para este usuário' });
+        }
+        
+        res.json(guests[0]);
+    } catch (error) {
+        console.error('Erro ao buscar hóspede por user_id:', error);
+        res.status(500).json({ error: 'Erro ao buscar hóspede' });
+    }
+};
+
 // Criar novo hóspede
 exports.createGuest = async (req, res) => {
     try {
