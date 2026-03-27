@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const sgMail = require('@sendgrid/mail');
+const { registerOperation } = require('../utils/codeGenerator');
 
 // Declarar pool no escopo global
 let pool;
@@ -204,44 +205,36 @@ exports.login = async (req, res) => {
 };
 
 // =====================================================
-// CONFIRMAR EMAIL - CRIA HÓSPEDE APENAS SE CONFIRMADO
+// CONFIRMAR EMAIL (COM GERAÇÃO DE CÓDIGO DE USUÁRIO)
 // =====================================================
 exports.confirmEmail = async (req, res) => {
     try {
         const { token } = req.params;
-
+        
         console.log('🔍 Verificando token:', token);
-
+        
         const [users] = await pool.query(
             `SELECT id, email, name, verification_token, verification_expires_at, email_verified 
              FROM users 
              WHERE verification_token = ?`,
             [token]
         );
-
+        
         if (users.length === 0) {
             console.log('❌ Token não encontrado');
             return res.status(400).json({ error: 'Link inválido' });
         }
-
+        
         const user = users[0];
-
-        console.log('📌 Dados:', {
-            email: user.email,
-            token_banco: user.verification_token,
-            expires_at: user.verification_expires_at,
-            now: new Date(),
-            is_verified: user.email_verified
-        });
-
+        
         if (user.email_verified) {
             return res.status(400).json({ error: 'Email já verificado' });
         }
-
+        
         if (new Date() > new Date(user.verification_expires_at)) {
             return res.status(400).json({ error: 'Link expirado. Solicite um novo link.' });
         }
-
+        
         // 1. Atualizar usuário como verificado
         await pool.query(
             `UPDATE users 
@@ -253,23 +246,51 @@ exports.confirmEmail = async (req, res) => {
              WHERE id = ?`,
             [user.id]
         );
-
-        // 2. ✅ AGORA SIM, CRIAR/ATUALIZAR HÓSPEDE NA TABELA GUESTS
+        
+        // 2. Gerar código de operação para o usuário (APÓS CONFIRMAÇÃO)
+        let userOperationCode = null;
+        try {
+            userOperationCode = await registerOperation('users', user.id, pool);
+            await pool.query(
+                'UPDATE users SET operation_code = ? WHERE id = ?',
+                [userOperationCode, user.id]
+            );
+            console.log(`✅ Código de usuário gerado: ${userOperationCode}`);
+        } catch (error) {
+            console.error('❌ Erro ao gerar código de usuário:', error);
+            // Não impede a confirmação, apenas loga o erro
+        }
+        
+        // 3. Criar/atualizar hóspede na tabela guests
         const [existingGuest] = await pool.query(
             `SELECT id FROM guests WHERE email = ?`,
             [user.email]
         );
-
+        
+        let guestOperationCode = null;
+        
         if (existingGuest.length === 0) {
             // Hóspede não existe - CRIAR
             const tempDocument = `TEMP-${user.id}-${Date.now()}`;
-            await pool.query(
+            const [guestResult] = await pool.query(
                 `INSERT INTO guests 
                  (user_id, name, email, document, email_verified, created_at)
                  VALUES (?, ?, ?, ?, TRUE, NOW())`,
                 [user.id, user.name, user.email, tempDocument]
             );
-            console.log(`✅ Hóspede criado para ${user.name} (user_id: ${user.id})`);
+            
+            // Gerar código de operação para o hóspede
+            try {
+                guestOperationCode = await registerOperation('guests', guestResult.insertId, pool);
+                await pool.query(
+                    'UPDATE guests SET operation_code = ? WHERE id = ?',
+                    [guestOperationCode, guestResult.insertId]
+                );
+                console.log(`✅ Código de hóspede gerado: ${guestOperationCode}`);
+            } catch (error) {
+                console.error('❌ Erro ao gerar código de hóspede:', error);
+            }
+            
         } else {
             // Hóspede já existe - ATUALIZAR
             await pool.query(
@@ -278,22 +299,46 @@ exports.confirmEmail = async (req, res) => {
                  WHERE id = ?`,
                 [user.id, user.name, user.email, existingGuest[0].id]
             );
-            console.log(`✅ Hóspede atualizado (guest_id: ${existingGuest[0].id}) vinculado ao user_id: ${user.id}`);
+            
+            // Se o hóspede não tiver código, gerar
+            const [guestCheck] = await pool.query(
+                'SELECT operation_code FROM guests WHERE id = ?',
+                [existingGuest[0].id]
+            );
+            
+            if (!guestCheck[0].operation_code) {
+                try {
+                    guestOperationCode = await registerOperation('guests', existingGuest[0].id, pool);
+                    await pool.query(
+                        'UPDATE guests SET operation_code = ? WHERE id = ?',
+                        [guestOperationCode, existingGuest[0].id]
+                    );
+                    console.log(`✅ Código de hóspede gerado para existente: ${guestOperationCode}`);
+                } catch (error) {
+                    console.error('❌ Erro ao gerar código de hóspede:', error);
+                }
+            }
         }
-
+        
         // Gerar token de autenticação
         const authToken = jwt.sign(
             { id: user.id, email: user.email, role: 'hospede' },
             process.env.JWT_SECRET,
             { expiresIn: process.env.JWT_EXPIRES_IN }
         );
-
+        
         res.json({ 
             message: 'Email confirmado com sucesso!',
             token: authToken,
-            user: { id: user.id, name: user.name, email: user.email, role: 'hospede' }
+            user: { 
+                id: user.id, 
+                name: user.name, 
+                email: user.email, 
+                role: 'hospede',
+                operation_code: userOperationCode
+            }
         });
-
+        
     } catch (error) {
         console.error('Erro na confirmação:', error);
         res.status(500).json({ error: 'Erro ao confirmar email' });

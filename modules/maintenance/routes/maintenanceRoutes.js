@@ -27,6 +27,7 @@ router.post('/equipment-categories', authorize.hasPermission('gerenciar_equipame
 // ORDENS DE SERVIÇO
 // =====================================================
 router.get('/work-orders', authorize.hasPermission('ver_manutencao'), workOrderController.getWorkOrders);
+router.get('/work-orders/by-code/:code', authorize.hasPermission('ver_manutencao'), workOrderController.getWorkOrderByCode);
 router.get('/work-orders/:id', authorize.hasPermission('ver_manutencao'), workOrderController.getWorkOrderById);
 router.post('/work-orders', authorize.hasPermission('criar_os'), workOrderController.createWorkOrder);
 router.post('/work-orders/:id/start', authorize.hasPermission('executar_os'), workOrderController.startWorkOrder);

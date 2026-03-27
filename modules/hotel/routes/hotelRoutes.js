@@ -42,6 +42,7 @@ router.get('/guests/document/:document', guestController.getGuestByDocument);
 router.post('/guests', guestController.createGuest);
 router.put('/guests/:id', guestController.updateGuest);
 router.delete('/guests/:id', guestController.deleteGuest);
+router.get('/by-code/:code', guestController.getGuestByOperationCode);
 
 // =====================================================
 // ROTAS DE RESERVAS (ATUALIZADAS)
@@ -49,6 +50,7 @@ router.delete('/guests/:id', guestController.deleteGuest);
 router.get('/bookings/availability', bookingController.checkAvailability);  // <-- DEVE VIR ANTES DE /bookings/:id
 router.get('/bookings', bookingController.getBookings);  // <-- DEVE ESTAR ASSIM
 router.get('/bookings/:id', bookingController.getBookingById);
+router.get('/bookings/by-code/:code', bookingController.getBookingByCode);
 router.post('/bookings', bookingController.createBooking);
 router.post('/bookings/:id/checkin', bookingController.checkIn);
 router.post('/bookings/:id/checkout', bookingController.checkOut);

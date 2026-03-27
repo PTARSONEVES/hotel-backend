@@ -1,14 +1,74 @@
 const pool = require('../../../config/database');
+const { registerOperation } = require('../../../utils/codeGenerator');
 
 // =====================================================
 // ORDENS DE SERVIÇO
 // =====================================================
 
-// Listar ordens de serviço
+// =====================================================
+// CRIAR ORDEM DE SERVIÇO (COM CÓDIGO DE OPERAÇÃO)
+// =====================================================
+exports.createWorkOrder = async (req, res) => {
+    try {
+        const {
+            equipment_id,
+            title,
+            description,
+            type,
+            priority,
+            scheduled_date,
+            assigned_to,
+            estimated_hours,
+            cost_estimate
+        } = req.body;
+        
+        console.log('📝 Criando ordem de serviço:', { title, equipment_id });
+        
+        const [result] = await pool.query(
+            `INSERT INTO work_orders 
+             (equipment_id, title, description, type, priority, scheduled_date, 
+              assigned_to, estimated_hours, cost_estimate, created_by, status, user_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'aberta', ?)`,
+            [
+                equipment_id, title, description, type || 'corretiva', 
+                priority || 'media', scheduled_date || null,
+                assigned_to || null, estimated_hours || null,
+                cost_estimate || null, req.userId, req.userId
+            ]
+        );
+        
+        const orderId = result.insertId;
+        
+        // Gerar código de operação
+        const operationCode = await registerOperation('work_orders', orderId, pool);
+        
+        // Atualizar o registro com o código
+        await pool.query(
+            'UPDATE work_orders SET operation_code = ? WHERE id = ?',
+            [operationCode, orderId]
+        );
+        
+        console.log(`✅ Ordem de serviço criada com código: ${operationCode}`);
+        
+        res.status(201).json({
+            id: orderId,
+            operationCode,
+            message: 'Ordem de serviço criada com sucesso'
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao criar ordem de serviço:', error);
+        res.status(500).json({ error: 'Erro ao criar ordem de serviço' });
+    }
+};
+
+// =====================================================
+// LISTAR ORDENS DE SERVIÇO (COM FILTRO POR CÓDIGO)
+// =====================================================
 exports.getWorkOrders = async (req, res) => {
     try {
-        const { status, priority, equipment_id, startDate, endDate } = req.query;
-
+        const { status, priority, equipment_id, startDate, endDate, code } = req.query;
+        
         let query = `
             SELECT wo.*, 
                    e.name as equipment_name,
@@ -22,7 +82,7 @@ exports.getWorkOrders = async (req, res) => {
             WHERE 1=1
         `;
         const params = [];
-
+        
         if (status) {
             query += ' AND wo.status = ?';
             params.push(status);
@@ -43,17 +103,55 @@ exports.getWorkOrders = async (req, res) => {
             query += ' AND DATE(wo.scheduled_date) <= ?';
             params.push(endDate);
         }
-
+        if (code) {
+            query += ' AND wo.operation_code = ?';
+            params.push(code);
+        }
+        
         query += ' ORDER BY wo.created_at DESC';
-
+        
         const [orders] = await pool.query(query, params);
         res.json(orders);
-
+        
     } catch (error) {
         console.error('Erro ao listar ordens de serviço:', error);
         res.status(500).json({ error: 'Erro ao listar ordens de serviço' });
     }
 };
+
+// =====================================================
+// BUSCAR ORDEM DE SERVIÇO POR CÓDIGO
+// =====================================================
+exports.getWorkOrderByCode = async (req, res) => {
+    try {
+        const { code } = req.params;
+        
+        const [orders] = await pool.query(
+            `SELECT wo.*, 
+                    e.name as equipment_name,
+                    e.serial_number,
+                    u.name as created_by_name,
+                    tec.name as assigned_to_name
+             FROM work_orders wo
+             LEFT JOIN equipment e ON wo.equipment_id = e.id
+             LEFT JOIN users u ON wo.created_by = u.id
+             LEFT JOIN users tec ON wo.assigned_to = tec.id
+             WHERE wo.operation_code = ?`,
+            [code]
+        );
+        
+        if (orders.length === 0) {
+            return res.status(404).json({ error: 'Ordem de serviço não encontrada' });
+        }
+        
+        res.json(orders[0]);
+        
+    } catch (error) {
+        console.error('Erro ao buscar OS por código:', error);
+        res.status(500).json({ error: 'Erro ao buscar ordem de serviço' });
+    }
+};
+
 
 // Buscar ordem de serviço por ID
 exports.getWorkOrderById = async (req, res) => {
@@ -107,43 +205,6 @@ exports.getWorkOrderById = async (req, res) => {
     }
 };
 
-// Criar ordem de serviço
-exports.createWorkOrder = async (req, res) => {
-    try {
-        const {
-            equipment_id,
-            title,
-            description,
-            type,
-            priority,
-            scheduled_date,
-            assigned_to,
-            estimated_hours,
-            cost_estimate
-        } = req.body;
-
-        const [result] = await pool.query(
-            `INSERT INTO work_orders 
-             (equipment_id, title, description, type, priority, scheduled_date, 
-              assigned_to, estimated_hours, cost_estimate, created_by, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'aberta')`,
-            [
-                equipment_id, title, description, type, priority || 'media',
-                scheduled_date, assigned_to || null, estimated_hours || null,
-                cost_estimate || null, req.userId
-            ]
-        );
-
-        res.status(201).json({
-            id: result.insertId,
-            message: 'Ordem de serviço criada com sucesso'
-        });
-
-    } catch (error) {
-        console.error('Erro ao criar ordem de serviço:', error);
-        res.status(500).json({ error: 'Erro ao criar ordem de serviço' });
-    }
-};
 
 // Iniciar ordem de serviço
 exports.startWorkOrder = async (req, res) => {

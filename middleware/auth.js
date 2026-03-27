@@ -22,19 +22,18 @@ module.exports = (req, res, next) => {
     console.log('📌 Token extraído:', token.substring(0, 20) + '...');
 
     try {
-        console.log('📌 JWT_SECRET usado:', process.env.JWT_SECRET ? '******' : 'NÃO DEFINIDO');
-       
-        if (!process.env.JWT_SECRET) {
-            console.log('❌ Erro: JWT_SECRET não está definido no .env');
-            return res.status(500).json({ error: 'Erro de configuração do servidor' });
-        }
-
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         console.log('✅ Token válido! Payload:', decoded);
         
+        // IMPORTANTE: definir req.user com os dados completos
         req.userId = decoded.id;
-        next();
+        req.user = {
+            id: decoded.id,
+            email: decoded.email,
+            role: decoded.role || 'hospede'
+        };
         
+        next();
     } catch (error) {
         console.log('❌ Erro na verificação do token:', error.message);
         

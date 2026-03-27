@@ -1,25 +1,44 @@
 const pool = require('../../../config/database');
+const { registerOperation, parseOperationCode } = require('../../../utils/codeGenerator');
 
-// Listar todos os hóspedes
+// =====================================================
+// LISTAR HÓSPEDES
+// =====================================================
 exports.getGuests = async (req, res) => {
     try {
-        const [guests] = await pool.query(`
+        const { code } = req.query;
+        
+        let query = `
             SELECT g.*, 
                    COUNT(b.id) as total_bookings,
                    MAX(b.check_in) as last_visit
             FROM guests g
             LEFT JOIN bookings b ON g.id = b.guest_id
-            GROUP BY g.id
-            ORDER BY g.created_at DESC
-        `);
+        `;
+        
+        const params = [];
+        
+        // Filtro por código (opcional)
+        if (code) {
+            query += ` WHERE g.operation_code = ?`;
+            params.push(code);
+        }
+        
+        query += ` GROUP BY g.id
+                   ORDER BY g.created_at DESC`;
+        
+        const [guests] = await pool.query(query, params);
         res.json(guests);
+        
     } catch (error) {
         console.error('Erro ao buscar hóspedes:', error);
         res.status(500).json({ error: 'Erro ao buscar hóspedes' });
     }
 };
 
-// Buscar hóspede por ID
+// =====================================================
+// BUSCAR HÓSPEDE POR ID
+// =====================================================
 exports.getGuestById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -39,12 +58,47 @@ exports.getGuestById = async (req, res) => {
             ORDER BY b.check_in DESC
         `, [id]);
         
+        // Analisar código de operação
+        let codeInfo = null;
+        if (guests[0].operation_code) {
+            codeInfo = await parseOperationCode(guests[0].operation_code);
+        }
+        
         res.json({
             ...guests[0],
-            bookings
+            bookings,
+            codeInfo
         });
     } catch (error) {
         console.error('Erro ao buscar hóspede:', error);
+        res.status(500).json({ error: 'Erro ao buscar hóspede' });
+    }
+};
+
+// =====================================================
+// BUSCAR HÓSPEDE POR CÓDIGO DE OPERAÇÃO
+// =====================================================
+exports.getGuestByOperationCode = async (req, res) => {
+    try {
+        const { code } = req.params;
+        
+        const [guests] = await pool.query(
+            'SELECT * FROM guests WHERE operation_code = ?',
+            [code]
+        );
+        
+        if (guests.length === 0) {
+            return res.status(404).json({ error: 'Hóspede não encontrado' });
+        }
+        
+        const codeInfo = await parseOperationCode(code);
+        
+        res.json({
+            guest: guests[0],
+            codeInfo
+        });
+    } catch (error) {
+        console.error('Erro ao buscar hóspede por código:', error);
         res.status(500).json({ error: 'Erro ao buscar hóspede' });
     }
 };
@@ -72,10 +126,14 @@ exports.getGuestByUserId = async (req, res) => {
     }
 };
 
-// Criar novo hóspede
+// =====================================================
+// CRIAR HÓSPEDE (COM CÓDIGO DE OPERAÇÃO)
+// =====================================================
 exports.createGuest = async (req, res) => {
     try {
-        const { name, document, email, phone, address, city, state, country } = req.body;
+        const { name, document, email, phone, address, city, state, country, user_id } = req.body;
+        
+        console.log('📝 Criando hóspede:', { name, email });
         
         // Verificar se documento já existe
         const [existing] = await pool.query(
@@ -88,22 +146,40 @@ exports.createGuest = async (req, res) => {
         }
         
         const [result] = await pool.query(
-            `INSERT INTO guests (name, document, email, phone, address, city, state, country)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [name, document, email, phone, address, city, state, country || 'Brasil']
+            `INSERT INTO guests 
+             (name, document, email, phone, address, city, state, country, user_id, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+            [name, document, email, phone, address, city, state, country || 'Brasil', user_id || null]
         );
         
+        const guestId = result.insertId;
+        
+        // Gerar e registrar código de operação
+        const operationCode = await registerOperation('guests', guestId, pool);
+        
+        // Atualizar o registro com o código
+        await pool.query(
+            'UPDATE guests SET operation_code = ? WHERE id = ?',
+            [operationCode, guestId]
+        );
+        
+        console.log(`✅ Hóspede criado com código: ${operationCode}`);
+        
         res.status(201).json({
-            id: result.insertId,
+            id: guestId,
+            operationCode,
             message: 'Hóspede cadastrado com sucesso'
         });
+        
     } catch (error) {
         console.error('Erro ao criar hóspede:', error);
         res.status(500).json({ error: 'Erro ao criar hóspede' });
     }
 };
 
-// Atualizar hóspede
+// =====================================================
+// ATUALIZAR HÓSPEDE
+// =====================================================
 exports.updateGuest = async (req, res) => {
     try {
         const { id } = req.params;
@@ -117,13 +193,16 @@ exports.updateGuest = async (req, res) => {
         );
         
         res.json({ message: 'Hóspede atualizado com sucesso' });
+        
     } catch (error) {
         console.error('Erro ao atualizar hóspede:', error);
         res.status(500).json({ error: 'Erro ao atualizar hóspede' });
     }
 };
 
-// Deletar hóspede
+// =====================================================
+// DELETAR HÓSPEDE
+// =====================================================
 exports.deleteGuest = async (req, res) => {
     try {
         const { id } = req.params;
@@ -142,13 +221,16 @@ exports.deleteGuest = async (req, res) => {
         
         await pool.query('DELETE FROM guests WHERE id = ?', [id]);
         res.json({ message: 'Hóspede excluído com sucesso' });
+        
     } catch (error) {
         console.error('Erro ao deletar hóspede:', error);
         res.status(500).json({ error: 'Erro ao deletar hóspede' });
     }
 };
 
-// Buscar hóspede por documento (para check-in rápido)
+// =====================================================
+// BUSCAR HÓSPEDE POR DOCUMENTO
+// =====================================================
 exports.getGuestByDocument = async (req, res) => {
     try {
         const { document } = req.params;

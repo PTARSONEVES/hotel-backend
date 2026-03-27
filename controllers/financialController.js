@@ -1,12 +1,12 @@
 const pool = require('../config/database');
+const { registerOperation } = require('../utils/codeGenerator');
 
 // =====================================================
 // DASHBOARD FINANCEIRO - VERSÃO COMPLETA
 // =====================================================
-
 exports.getDashboard = async (req, res) => {
     try {
-        const { startDate, endDate } = req.query;
+        const { startDate, endDate, code } = req.query;
         
         console.log('📊 Carregando dashboard financeiro:', { startDate, endDate });
 
@@ -169,13 +169,63 @@ exports.getDashboard = async (req, res) => {
         });
     }
 };
+
 // =====================================================
-// CONTAS A RECEBER
+// CRIAR CONTA A RECEBER (COM CÓDIGO DE OPERAÇÃO)
+// =====================================================
+exports.createReceivable = async (req, res) => {
+    try {
+        const { title, description, amount, due_date, category_id, notes } = req.body;
+
+        console.log('📝 Criando conta a receber:', { title, amount, due_date, category_id });
+
+        // Validações
+        if (!title || !amount || !due_date) {
+            return res.status(400).json({ error: 'Título, valor e data de vencimento são obrigatórios' });
+        }
+
+        const [result] = await pool.query(
+            `INSERT INTO accounts 
+             (user_id, title, description, amount, type, due_date, category_id, notes, created_by, status)
+             VALUES (?, ?, ?, ?, 'receber', ?, ?, ?, ?, 'pendente')`,
+            [req.userId, title, description || null, amount, due_date, category_id || null, notes || null, req.userId]
+        );
+
+        const accountId = result.insertId;
+
+        // Gerar código de operação
+        const operationCode = await registerOperation('accounts', accountId, pool);
+
+        // Atualizar o registro com o código
+        await pool.query(
+            'UPDATE accounts SET operation_code = ? WHERE id = ?',
+            [operationCode, accountId]
+        );
+
+        console.log(`✅ Conta a receber criada com código: ${operationCode}`);
+
+        res.status(201).json({
+            id: accountId,
+            operationCode,
+            message: 'Conta a receber criada com sucesso'
+        });
+
+    } catch (error) {
+        console.error('❌ Erro detalhado ao criar conta a receber:', error);
+        res.status(500).json({ 
+            error: 'Erro ao criar conta a receber',
+            details: error.message
+        });
+    }
+};
+
+// =====================================================
+// LISTAR CONTAS A RECEBER (COM FILTRO POR CÓDIGO)
 // =====================================================
 exports.getReceivables = async (req, res) => {
     try {
-        const { status, startDate, endDate } = req.query;
-
+        const { status, startDate, endDate, code } = req.query;
+        
         let query = `
             SELECT a.*, b.guest_name, b.room_number, b.check_in, b.check_out
             FROM accounts a
@@ -183,7 +233,7 @@ exports.getReceivables = async (req, res) => {
             WHERE a.type = 'receber'
         `;
         const params = [];
-
+        
         if (status) {
             query += ' AND a.status = ?';
             params.push(status);
@@ -196,12 +246,16 @@ exports.getReceivables = async (req, res) => {
             query += ' AND a.due_date <= ?';
             params.push(endDate);
         }
-
+        if (code) {
+            query += ' AND a.operation_code = ?';
+            params.push(code);
+        }
+        
         query += ' ORDER BY a.due_date ASC';
-
+        
         const [receivables] = await pool.query(query, params);
         res.json(receivables);
-
+        
     } catch (error) {
         console.error('Erro ao buscar contas a receber:', error);
         res.status(500).json({ error: 'Erro ao buscar contas a receber' });
@@ -209,19 +263,52 @@ exports.getReceivables = async (req, res) => {
 };
 
 // =====================================================
+// BUSCAR CONTA A RECEBER POR CÓDIGO
+// =====================================================
+exports.getReceivableByCode = async (req, res) => {
+    try {
+        const { code } = req.params;
+        
+        const [receivables] = await pool.query(
+            `SELECT a.*, b.guest_name, b.room_number
+             FROM accounts a
+             LEFT JOIN bookings b ON a.reference_id = b.id
+             WHERE a.type = 'receber' AND a.operation_code = ?`,
+            [code]
+        );
+        
+        if (receivables.length === 0) {
+            return res.status(404).json({ error: 'Conta a receber não encontrada' });
+        }
+        
+        res.json(receivables[0]);
+        
+    } catch (error) {
+        console.error('Erro ao buscar conta por código:', error);
+        res.status(500).json({ error: 'Erro ao buscar conta' });
+    }
+};
+
+// =====================================================
 // CONTAS A PAGAR
 // =====================================================
 exports.getBills = async (req, res) => {
+    let payables = [];
     try {
         const { status, category_id } = req.query;
 
-        let query = `
+        let billsQuery = `
             SELECT b.*, ac.name as category_name
             FROM bills b
             LEFT JOIN account_categories ac ON b.category_id = ac.id
-            WHERE 1=1
+            WHERE (b.due_date BETWEEN ? AND ? OR b.payment_date BETWEEN ? AND ?)
         `;
-        const params = [];
+        const billsParams = [inicio, fim, inicio, fim];
+
+        if (code) {
+            billsQuery += ' AND b.operation_code = ?';
+            billsParams.push(code);
+        }
 
         if (status) {
             query += ' AND b.status = ?';
@@ -232,9 +319,9 @@ exports.getBills = async (req, res) => {
             params.push(category_id);
         }
 
-        query += ' ORDER BY b.due_date ASC';
+        billsQuery += ' ORDER BY b.due_date ASC';
 
-        const [bills] = await pool.query(query, params);
+        const [bills] = await pool.query(billsQuery, billsParams);
         res.json(bills);
 
     } catch (error) {
@@ -244,32 +331,43 @@ exports.getBills = async (req, res) => {
 };
 
 // =====================================================
-// CRIAR CONTA A PAGAR
+// CRIAR CONTA A PAGAR (COM CÓDIGO DE OPERAÇÃO)
 // =====================================================
 exports.createBill = async (req, res) => {
     try {
         const { description, amount, due_date, category_id, supplier, notes } = req.body;
-        
+
         console.log('📝 Criando conta a pagar:', { description, amount, due_date });
 
         const [result] = await pool.query(
             `INSERT INTO bills 
-             (description, amount, due_date, category_id, supplier, notes, created_by, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, 'pendente')`,
-            [description, amount, due_date, category_id || null, supplier || null, notes || null, req.userId]
+             (user_id, description, amount, due_date, category_id, supplier, notes, created_by, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pendente')`,
+            [req.userId, description, amount, due_date, category_id || null, supplier || null, notes || null, req.userId]
         );
 
+        const billId = result.insertId;
+
+        // Gerar código de operação
+        const operationCode = await registerOperation('bills', billId, pool);
+
+        // Atualizar o registro com o código
+        await pool.query(
+            'UPDATE bills SET operation_code = ? WHERE id = ?',
+            [operationCode, billId]
+        );
+
+        console.log(`✅ Conta a pagar criada com código: ${operationCode}`);
+
         res.status(201).json({
-            id: result.insertId,
+            id: billId,
+            operationCode,
             message: 'Conta a pagar criada com sucesso'
         });
 
     } catch (error) {
         console.error('❌ Erro ao criar conta a pagar:', error);
-        res.status(500).json({ 
-            error: 'Erro ao criar conta a pagar',
-            details: error.message 
-        });
+        res.status(500).json({ error: 'Erro ao criar conta a pagar' });
     }
 };
 
@@ -427,5 +525,20 @@ exports.deleteReceivable = async (req, res) => {
     } catch (error) {
         console.error('❌ Erro ao excluir conta a receber:', error);
         res.status(500).json({ error: 'Erro ao excluir conta a receber' });
+    }
+};
+
+// =====================================================
+// BUSCAR CATEGORIAS DE RECEITAS
+// =====================================================
+exports.getRevenueCategories = async (req, res) => {
+    try {
+        const [categories] = await pool.query(
+            'SELECT * FROM account_categories WHERE type = "receita" ORDER BY name'
+        );
+        res.json(categories);
+    } catch (error) {
+        console.error('Erro ao buscar categorias de receita:', error);
+        res.status(500).json({ error: 'Erro ao buscar categorias' });
     }
 };

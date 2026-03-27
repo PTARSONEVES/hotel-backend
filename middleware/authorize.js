@@ -1,6 +1,6 @@
 const pool = require('../config/database');
 
-// Hierarquia de papéis (para validação simples)
+// Hierarquia de papéis
 const roleHierarchy = {
     'hospede': 1,
     'colaborador': 2,
@@ -10,7 +10,15 @@ const roleHierarchy = {
 // Verificar se o usuário tem um papel mínimo
 exports.minimumRole = (requiredRole) => {
     return (req, res, next) => {
+        // Verificar se req.user existe
+        if (!req.user) {
+            console.error('❌ authorize.minimumRole: req.user não definido');
+            return res.status(401).json({ error: 'Usuário não autenticado' });
+        }
+        
         const userRole = req.user.role || 'hospede';
+        
+        console.log(`🔍 Verificando papel: ${userRole} >= ${requiredRole} ?`);
         
         if (roleHierarchy[userRole] >= roleHierarchy[requiredRole]) {
             next();
@@ -26,26 +34,20 @@ exports.minimumRole = (requiredRole) => {
 exports.hasPermission = (permissionName) => {
     return async (req, res, next) => {
         try {
-            const userId = req.userId;
-            
-            // Buscar papel do usuário
-            const [users] = await pool.query(
-                'SELECT role FROM users WHERE id = ?',
-                [userId]
-            );
-            
-            if (users.length === 0) {
-                return res.status(404).json({ error: 'Usuário não encontrado' });
+            if (!req.user) {
+                console.error('❌ authorize.hasPermission: req.user não definido');
+                return res.status(401).json({ error: 'Usuário não autenticado' });
             }
             
-            const userRole = users[0].role;
+            const userId = req.user.id;
+            const userRole = req.user.role;
             
             // Admin tem todas as permissões
             if (userRole === 'admin') {
                 return next();
             }
             
-            // Verificar se o papel tem a permissão
+            // Buscar permissão do papel
             const [permissions] = await pool.query(
                 `SELECT p.* FROM permissions p
                  JOIN role_permissions rp ON p.id = rp.permission_id
@@ -67,11 +69,15 @@ exports.hasPermission = (permissionName) => {
     };
 };
 
-// Middleware para verificar se o usuário é o próprio ou admin
+// Verificar se o usuário é o próprio ou admin
 exports.isSelfOrAdmin = (paramName = 'id') => {
     return (req, res, next) => {
+        if (!req.user) {
+            return res.status(401).json({ error: 'Usuário não autenticado' });
+        }
+        
         const userId = parseInt(req.params[paramName]);
-        const currentUserId = req.userId;
+        const currentUserId = req.user.id;
         const userRole = req.user.role;
         
         if (currentUserId === userId || userRole === 'admin') {

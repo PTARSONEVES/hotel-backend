@@ -1,7 +1,8 @@
 const pool = require('../../config/database');
+const { registerOperation } = require('../../utils/codeGenerator');
 
 // =====================================================
-// CRIAR NOVO LEAD (PÚBLICO)
+// CRIAR LEAD (COM CÓDIGO DE OPERAÇÃO)
 // =====================================================
 exports.createLead = async (req, res) => {
     try {
@@ -64,6 +65,119 @@ exports.createLead = async (req, res) => {
 };
 
 // =====================================================
+// LISTAR LEADS (COM FILTRO POR CÓDIGO -PROTEGIDO - SÓ PARA ADMIN)
+// =====================================================
+exports.getLeads = async (req, res) => {
+    try {
+        const { status, startDate, endDate, code } = req.query;
+        
+        let query = 'SELECT * FROM leads WHERE 1=1';
+        const params = [];
+        
+        if (status) {
+            query += ' AND status = ?';
+            params.push(status);
+        }
+        if (startDate) {
+            query += ' AND DATE(created_at) >= ?';
+            params.push(startDate);
+        }
+        if (endDate) {
+            query += ' AND DATE(created_at) <= ?';
+            params.push(endDate);
+        }
+        if (code) {
+            query += ' AND operation_code = ?';
+            params.push(code);
+        }
+        
+        query += ' ORDER BY created_at DESC';
+        
+        const [leads] = await pool.query(query, params);
+        res.json(leads);
+        
+    } catch (error) {
+        console.error('Erro ao listar leads:', error);
+        res.status(500).json({ error: 'Erro ao listar leads' });
+    }
+};
+
+// =====================================================
+// BUSCAR LEAD POR CÓDIGO
+// =====================================================
+exports.getLeadByCode = async (req, res) => {
+    try {
+        const { code } = req.params;
+        
+        const [leads] = await pool.query(
+            'SELECT * FROM leads WHERE operation_code = ?',
+            [code]
+        );
+        
+        if (leads.length === 0) {
+            return res.status(404).json({ error: 'Lead não encontrado' });
+        }
+        
+        res.json(leads[0]);
+        
+    } catch (error) {
+        console.error('Erro ao buscar lead por código:', error);
+        res.status(500).json({ error: 'Erro ao buscar lead' });
+    }
+};
+
+// =====================================================
+// ATUALIZAR STATUS DO LEAD (PROTEGIDO)
+// =====================================================
+exports.updateLeadStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status, notes } = req.body;
+        
+        await pool.query(
+            'UPDATE leads SET status = ?, notes = ? WHERE id = ?',
+            [status, notes, id]
+        );
+        
+        res.json({ message: 'Lead atualizado com sucesso' });
+        
+    } catch (error) {
+        console.error('Erro ao atualizar lead:', error);
+        res.status(500).json({ error: 'Erro ao atualizar lead' });
+    }
+};
+
+// =====================================================
+// CONVERTER LEAD EM RESERVA (PROTEGIDO)
+// =====================================================
+exports.convertLeadToBooking = async (req, res) => {
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+        
+        const { id } = req.params;
+        const { booking_id } = req.body;
+        
+        // Atualizar lead
+        await connection.query(
+            'UPDATE leads SET status = ?, converted_booking_id = ? WHERE id = ?',
+            ['convertido', booking_id, id]
+        );
+        
+        await connection.commit();
+        
+        res.json({ message: 'Lead convertido em reserva com sucesso' });
+        
+    } catch (error) {
+        await connection.rollback();
+        console.error('Erro ao converter lead:', error);
+        res.status(500).json({ error: 'Erro ao converter lead' });
+    } finally {
+        connection.release();
+    }
+};
+
+// =====================================================
 // ENVIAR RESPOSTA AUTOMÁTICA (OPCIONAL)
 // =====================================================
 exports.sendAutoResponder = async (req, res) => {
@@ -83,107 +197,4 @@ exports.sendAutoResponder = async (req, res) => {
     }
 };
 
-// =====================================================
-// LISTAR LEADS (PROTEGIDO - SÓ PARA ADMIN)
-// =====================================================
-exports.getLeads = async (req, res) => {
-    try {
-        const { status, startDate, endDate, page = 1, limit = 20 } = req.query;
-        const offset = (page - 1) * limit;
 
-        let query = 'SELECT * FROM leads WHERE 1=1';
-        const params = [];
-
-        if (status) {
-            query += ' AND status = ?';
-            params.push(status);
-        }
-
-        if (startDate) {
-            query += ' AND created_at >= ?';
-            params.push(startDate);
-        }
-
-        if (endDate) {
-            query += ' AND created_at <= ?';
-            params.push(endDate);
-        }
-
-        query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-        params.push(parseInt(limit), offset);
-
-        const [leads] = await pool.query(query, params);
-
-        // Total para paginação
-        const [total] = await pool.query(
-            'SELECT COUNT(*) as count FROM leads' + 
-            (status ? ' WHERE status = ?' : ''),
-            status ? [status] : []
-        );
-
-        res.json({
-            leads,
-            pagination: {
-                currentPage: parseInt(page),
-                totalPages: Math.ceil(total[0].count / limit),
-                totalItems: total[0].count,
-                itemsPerPage: parseInt(limit)
-            }
-        });
-
-    } catch (error) {
-        console.error('❌ Erro ao listar leads:', error);
-        res.status(500).json({ error: 'Erro ao listar leads' });
-    }
-};
-
-// =====================================================
-// ATUALIZAR STATUS DO LEAD (PROTEGIDO)
-// =====================================================
-exports.updateLeadStatus = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { status, notes } = req.body;
-
-        await pool.query(
-            'UPDATE leads SET status = ?, notes = ? WHERE id = ?',
-            [status, notes, id]
-        );
-
-        res.json({ success: true, message: 'Lead atualizado com sucesso' });
-
-    } catch (error) {
-        console.error('❌ Erro ao atualizar lead:', error);
-        res.status(500).json({ error: 'Erro ao atualizar lead' });
-    }
-};
-
-// =====================================================
-// CONVERTER LEAD EM RESERVA (PROTEGIDO)
-// =====================================================
-exports.convertLeadToBooking = async (req, res) => {
-    const connection = await pool.getConnection();
-    try {
-        await connection.beginTransaction();
-
-        const { id } = req.params;
-        const { booking_id } = req.body;
-
-        // Atualizar lead
-        await connection.query(
-            'UPDATE leads SET status = ?, converted_booking_id = ? WHERE id = ?',
-            ['convertido', booking_id, id]
-        );
-
-        await connection.commit();
-
-        res.json({ success: true, message: 'Lead convertido em reserva' });
-
-    } catch (error) {
-        await connection.rollback();
-        console.error('❌ Erro ao converter lead:', error);
-        res.status(500).json({ error: 'Erro ao converter lead' });
-    } finally {
-        connection.release();
-    }
-};
