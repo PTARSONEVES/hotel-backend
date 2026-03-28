@@ -18,6 +18,7 @@ router.get('/receivables', authorize.hasPermission('ver_todas_contas'), financia
 router.get('/receivables/by-code/:code', authorize.hasPermission('ver_conta_por_codigo'), financialController.getReceivableByCode);
 router.post('/receivables', authorize.hasPermission('criar_conta'), financialController.createReceivable);
 router.put('/receivables/:id', authorize.hasPermission('editar_conta'), financialController.updateReceivable);
+router.put('/receivables/:id/receive', financialController.receiveReceivable);
 router.delete('/receivables/:id', authorize.hasPermission('excluir_conta'), financialController.deleteReceivable);
 
 // Contas a Pagar

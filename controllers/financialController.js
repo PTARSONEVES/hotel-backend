@@ -542,3 +542,26 @@ exports.getRevenueCategories = async (req, res) => {
         res.status(500).json({ error: 'Erro ao buscar categorias' });
     }
 };
+
+// =====================================================
+// RECEBER CONTA A RECEBER (MARCAR COMO PAGO)
+// =====================================================
+exports.receiveReceivable = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { payment_date } = req.body;
+        
+        await pool.query(
+            `UPDATE accounts 
+             SET status = 'pago', payment_date = ?
+             WHERE id = ? AND type = 'receber'`,
+            [payment_date || new Date(), id]
+        );
+        
+        res.json({ message: 'Recebimento registrado com sucesso' });
+        
+    } catch (error) {
+        console.error('Erro ao registrar recebimento:', error);
+        res.status(500).json({ error: 'Erro ao registrar recebimento' });
+    }
+};
