@@ -150,3 +150,164 @@ exports.getMaterialConsumption = async (req, res) => {
         res.status(500).json({ error: 'Erro ao gerar relatório' });
     }
 };
+
+// =====================================================
+// DADOS PARA GRÁFICO DE OS POR STATUS
+// =====================================================
+exports.getWorkOrdersByStatus = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        
+        let query = `
+            SELECT 
+                status,
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'concluida' THEN 1 ELSE 0 END) as concluidas,
+                SUM(CASE WHEN status = 'aberta' THEN 1 ELSE 0 END) as abertas,
+                SUM(CASE WHEN status = 'em_andamento' THEN 1 ELSE 0 END) as em_andamento,
+                SUM(CASE WHEN status = 'cancelada' THEN 1 ELSE 0 END) as canceladas
+            FROM work_orders
+            WHERE 1=1
+        `;
+        const params = [];
+        
+        if (startDate) {
+            query += ' AND DATE(created_at) >= ?';
+            params.push(startDate);
+        }
+        if (endDate) {
+            query += ' AND DATE(created_at) <= ?';
+            params.push(endDate);
+        }
+        
+        query += ' GROUP BY status';
+        
+        const [statusData] = await pool.query(query, params);
+        res.json(statusData);
+        
+    } catch (error) {
+        console.error('Erro ao buscar dados de status:', error);
+        res.status(500).json({ error: 'Erro ao buscar dados' });
+    }
+};
+
+// =====================================================
+// DADOS PARA GRÁFICO DE CUSTOS POR MÊS
+// =====================================================
+exports.getMonthlyCosts = async (req, res) => {
+    try {
+        const { year } = req.query;
+        const ano = year || new Date().getFullYear();
+        
+        const [costs] = await pool.query(`
+            SELECT 
+                MONTH(completion_date) as mes,
+                SUM(actual_cost) as custo_mao_obra,
+                COALESCE((
+                    SELECT SUM(total_price) 
+                    FROM work_order_materials wom
+                    JOIN work_orders wo2 ON wom.work_order_id = wo2.id
+                    WHERE MONTH(wo2.completion_date) = mes AND YEAR(wo2.completion_date) = ?
+                ), 0) as custo_materiais
+            FROM work_orders
+            WHERE YEAR(completion_date) = ? AND status = 'concluida'
+            GROUP BY MONTH(completion_date)
+            ORDER BY mes
+        `, [ano, ano]);
+        
+        res.json(costs);
+        
+    } catch (error) {
+        console.error('Erro ao buscar custos mensais:', error);
+        res.status(500).json({ error: 'Erro ao buscar custos' });
+    }
+};
+
+// =====================================================
+// DADOS PARA GRÁFICO DE MATERIAIS MAIS UTILIZADOS
+// =====================================================
+exports.getTopMaterials = async (req, res) => {
+    try {
+        const { limit = 10, startDate, endDate } = req.query;
+        
+        let query = `
+            SELECT 
+                m.id,
+                m.name,
+                m.code,
+                SUM(wom.quantity) as total_quantidade,
+                SUM(wom.total_price) as total_custo
+            FROM work_order_materials wom
+            JOIN materials m ON wom.material_id = m.id
+            JOIN work_orders wo ON wom.work_order_id = wo.id
+            WHERE wo.status = 'concluida'
+        `;
+        const params = [];
+        
+        if (startDate) {
+            query += ' AND DATE(wo.completion_date) >= ?';
+            params.push(startDate);
+        }
+        if (endDate) {
+            query += ' AND DATE(wo.completion_date) <= ?';
+            params.push(endDate);
+        }
+        
+        query += ` GROUP BY m.id, m.name, m.code
+                   ORDER BY total_quantidade DESC
+                   LIMIT ?`;
+        params.push(parseInt(limit));
+        
+        const [materials] = await pool.query(query, params);
+        res.json(materials);
+        
+    } catch (error) {
+        console.error('Erro ao buscar materiais mais utilizados:', error);
+        res.status(500).json({ error: 'Erro ao buscar dados' });
+    }
+};
+
+// =====================================================
+// DADOS PARA GRÁFICO DE EQUIPAMENTOS COM MAIS OS
+// =====================================================
+exports.getTopEquipment = async (req, res) => {
+    try {
+        const { limit = 10, startDate, endDate } = req.query;
+        
+        let query = `
+            SELECT 
+                e.id,
+                e.name,
+                e.serial_number,
+                COUNT(wo.id) as total_os,
+                SUM(CASE WHEN wo.status = 'concluida' THEN 1 ELSE 0 END) as concluidas,
+                AVG(wo.total_hours) as media_horas,
+                AVG(wo.actual_cost) as media_custo
+            FROM equipment e
+            JOIN work_orders wo ON e.id = wo.equipment_id
+            WHERE 1=1
+        `;
+        const params = [];
+        
+        if (startDate) {
+            query += ' AND DATE(wo.created_at) >= ?';
+            params.push(startDate);
+        }
+        if (endDate) {
+            query += ' AND DATE(wo.created_at) <= ?';
+            params.push(endDate);
+        }
+        
+        query += ` GROUP BY e.id, e.name, e.serial_number
+                   ORDER BY total_os DESC
+                   LIMIT ?`;
+        params.push(parseInt(limit));
+        
+        const [equipment] = await pool.query(query, params);
+        res.json(equipment);
+        
+    } catch (error) {
+        console.error('Erro ao buscar equipamentos:', error);
+        res.status(500).json({ error: 'Erro ao buscar dados' });
+    }
+};
