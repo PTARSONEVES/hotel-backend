@@ -7,6 +7,7 @@ const equipmentController = require('../controllers/equipmentController');
 const workOrderController = require('../controllers/workOrderController');
 const stockController = require('../controllers/stockController');
 const reportsController = require('../controllers/maintenanceReportsController');
+const materialCategoryController = require('../controllers/materialCategoryController');
 
 // Todas as rotas exigem autenticação
 router.use(authMiddleware);
@@ -15,13 +16,17 @@ router.use(authMiddleware);
 // EQUIPAMENTOS
 // =====================================================
 router.get('/equipment', authorize.hasPermission('ver_manutencao'), equipmentController.getEquipment);
+router.get('/equipment/by-code/:code', authorize.hasPermission('ver_manutencao'), equipmentController.getEquipmentByCode);
 router.get('/equipment/:id', authorize.hasPermission('ver_manutencao'), equipmentController.getEquipmentById);
 router.post('/equipment', authorize.hasPermission('gerenciar_equipamentos'), equipmentController.createEquipment);
 router.put('/equipment/:id', authorize.hasPermission('gerenciar_equipamentos'), equipmentController.updateEquipment);
+router.delete('/equipment/:id', authorize.hasPermission('gerenciar_equipamentos'), equipmentController.deleteEquipment);
 
 // Categorias de equipamentos
 router.get('/equipment-categories', authorize.hasPermission('ver_manutencao'), equipmentController.getEquipmentCategories);
 router.post('/equipment-categories', authorize.hasPermission('gerenciar_equipamentos'), equipmentController.createEquipmentCategory);
+router.put('/equipment-categories/:id', authorize.hasPermission('gerenciar_equipamentos'), equipmentController.updateEquipmentCategory);
+router.delete('/equipment-categories/:id', authorize.hasPermission('gerenciar_equipamentos'), equipmentController.deleteEquipmentCategory);
 
 // =====================================================
 // ORDENS DE SERVIÇO
@@ -44,8 +49,11 @@ router.post('/stock/exit', authorize.hasPermission('gerenciar_almoxarifado'), st
 router.post('/stock/inventory', authorize.hasPermission('gerenciar_almoxarifado'), stockController.doInventory);
 
 // Categorias de materiais
-router.get('/material-categories', authorize.hasPermission('ver_almoxarifado'), stockController.getMaterialCategories);
-router.post('/material-categories', authorize.hasPermission('gerenciar_almoxarifado'), stockController.createMaterialCategory);
+router.get('/material-categories', authorize.hasPermission('ver_almoxarifado'), materialCategoryController.getCategories);
+router.get('/material-categories/:id', authorize.hasPermission('ver_almoxarifado'), materialCategoryController.getCategoryById);
+router.post('/material-categories', authorize.hasPermission('gerenciar_almoxarifado'), materialCategoryController.createCategory);
+router.put('/material-categories/:id', authorize.hasPermission('gerenciar_almoxarifado'), materialCategoryController.updateCategory);
+router.delete('/material-categories/:id', authorize.hasPermission('gerenciar_almoxarifado'), materialCategoryController.deleteCategory);
 
 // =====================================================
 // RELATÓRIOS E INDICADORES
