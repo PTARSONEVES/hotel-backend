@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const chatbotController = require('./controllers/chatbotController');
 require('dotenv').config();
 
 const app = express();
@@ -55,7 +56,9 @@ app.get('/api/health', (req, res) => {
         cors: allowedOrigins 
     });
 });
-
+// Rota do chatbot
+app.post('/api/chatbot/message', chatbotController.processMessage);
+app.post('/api/chatbot/feedback', chatbotController.saveFeedback);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
