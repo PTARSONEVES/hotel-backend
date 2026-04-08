@@ -35,23 +35,21 @@ app.use(express.json());
 app.use(cookieParser());
 
 // =====================================================
-// MIDDLEWARE DE RASTREAMENTO (UMA ÚNICA VEZ)
+// MIDDLEWARE DE RASTREAMENTO
 // =====================================================
 const { trackVisitor } = require('./middleware/tracking');
 app.use(trackVisitor);
 
 // =====================================================
-// ROTAS PÚBLICAS (NÃO EXIGEM AUTENTICAÇÃO)
+// ROTAS PÚBLICAS
 // =====================================================
 const visitorRoutes = require('./routes/admin/visitorRoutes');
 const publicRoutes = require('./routes/publicRoutes');
 
 app.use('/api/public', publicRoutes);
-app.use('/api/visitors', visitorRoutes);  // Apenas uma vez
+app.use('/api/visitors', visitorRoutes);
 
-// =====================================================
-// ROTA DE TESTE DE TRACKING
-// =====================================================
+// Rota de teste de tracking
 app.get('/api/visitors/test-status', (req, res) => {
     const consent = req.cookies?.tracking_consent;
     const sessionId = req.cookies?.visitor_session;
@@ -68,7 +66,7 @@ app.get('/api/visitors/test-status', (req, res) => {
 });
 
 // =====================================================
-// ROTAS PROTEGIDAS (EXIGEM AUTENTICAÇÃO)
+// ROTAS PROTEGIDAS
 // =====================================================
 const authRoutes = require('./routes/authRoutes');
 const accountRoutes = require('./routes/accountRoutes');
@@ -101,20 +99,6 @@ app.get('/api/health', (req, res) => {
         cors: allowedOrigins 
     });
 });
-
-// =====================================================
-// SERVE ARQUIVOS ESTÁTICOS DO FRONTEND (EM PRODUÇÃO)
-// =====================================================
-if (process.env.NODE_ENV === 'production') {
-    // Caminho para a build do frontend (ajuste conforme sua estrutura)
-    const frontendPath = path.join(__dirname, '../frontend/dist');
-    app.use(express.static(frontendPath));
-    
-    // Fallback para rotas do React (SPA)
-    app.get('*', (req, res) => {
-        res.sendFile(path.join(frontendPath, 'index.html'));
-    });
-}
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
