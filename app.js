@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const chatbotController = require('./controllers/chatbotController');
+const { trackVisitor } = require('./middleware/tracking');
 require('dotenv').config();
 
 const app = express();
@@ -35,7 +36,9 @@ const adminLeadRoutes = require('./routes/admin/leadRoutes');
 const userRoutes = require('./routes/admin/userRoutes');
 const financialRoutes = require('./routes/financialRoutes');
 const maintenanceRoutes = require('./modules/maintenance/routes/maintenanceRoutes');
+const visitorRoutes = require('./routes/admin/visitorRoutes');
 
+app.use(trackVisitor);
 // Rotas públicas (ANTES do middleware de autenticação)
 app.use('/api/public', publicRoutes);
 // Rotas protegidas
@@ -48,6 +51,7 @@ app.use('/api/admin', adminLeadRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/financial', financialRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
+app.use('/api/admin/visitors', visitorRoutes);
 // Rota de saúde
 app.get('/api/health', (req, res) => {
     res.json({ 
