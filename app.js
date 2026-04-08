@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const chatbotController = require('./controllers/chatbotController');
-const { trackVisitor } = require('./middleware/tracking');
+const cookieParser = require('cookie-parser');
 require('dotenv').config();
 
 const app = express();
@@ -22,11 +22,18 @@ app.use(cors({
 }));
 
 app.use(express.json());
+app.use(cookieParser());
 
+// =====================================================
+// MIDDLEWARE DE RASTREAMENTO
+// =====================================================
+const { trackVisitor } = require('./middleware/tracking');
+app.use(trackVisitor);
 
 // =====================================================
 // SUAS ROTAS EXISTENTES
 // =====================================================
+const visitorRoutes = require('./routes/admin/visitorRoutes');
 const authRoutes = require('./routes/authRoutes');
 const accountRoutes = require('./routes/accountRoutes');
 const passwordRoutes = require('./routes/passwordRoutes');
@@ -36,11 +43,11 @@ const adminLeadRoutes = require('./routes/admin/leadRoutes');
 const userRoutes = require('./routes/admin/userRoutes');
 const financialRoutes = require('./routes/financialRoutes');
 const maintenanceRoutes = require('./modules/maintenance/routes/maintenanceRoutes');
-const visitorRoutes = require('./routes/admin/visitorRoutes');
 
 app.use(trackVisitor);
 // Rotas públicas (ANTES do middleware de autenticação)
 app.use('/api/public', publicRoutes);
+app.use('/api/visitors', visitorRoutes);  // Rota pública para teste
 // Rotas protegidas
 app.use('/api/auth', authRoutes);
 app.use('/api/accounts', accountRoutes);

@@ -6,13 +6,13 @@ const pool = require('../config/database');
 exports.getDashboard = async (req, res) => {
     try {
         const { period = '30d' } = req.query;
-        
+
         // Determinar intervalo
         let interval = '30 DAY';
         if (period === '7d') interval = '7 DAY';
         if (period === '30d') interval = '30 DAY';
         if (period === '90d') interval = '90 DAY';
-        
+
         // Total de visitantes
         const [total] = await pool.query(`
             SELECT 
@@ -22,7 +22,7 @@ exports.getDashboard = async (req, res) => {
             FROM visitors
             WHERE first_visit >= DATE_SUB(NOW(), INTERVAL ${interval})
         `);
-        
+
         // Visitantes por dia
         const [daily] = await pool.query(`
             SELECT 
@@ -35,7 +35,7 @@ exports.getDashboard = async (req, res) => {
             ORDER BY date DESC
             LIMIT 30
         `);
-        
+
         // Por dispositivo
         const [byDevice] = await pool.query(`
             SELECT 
@@ -45,7 +45,7 @@ exports.getDashboard = async (req, res) => {
             WHERE first_visit >= DATE_SUB(NOW(), INTERVAL ${interval})
             GROUP BY device_type
         `);
-        
+
         // Por navegador
         const [byBrowser] = await pool.query(`
             SELECT 
@@ -57,7 +57,7 @@ exports.getDashboard = async (req, res) => {
             ORDER BY total DESC
             LIMIT 10
         `);
-        
+
         // Por SO
         const [byOS] = await pool.query(`
             SELECT 
@@ -69,7 +69,7 @@ exports.getDashboard = async (req, res) => {
             ORDER BY total DESC
             LIMIT 10
         `);
-        
+
         // Por país
         const [byCountry] = await pool.query(`
             SELECT 
@@ -81,7 +81,7 @@ exports.getDashboard = async (req, res) => {
             ORDER BY total DESC
             LIMIT 20
         `);
-        
+
         // Por origem (referrer)
         const [byReferrer] = await pool.query(`
             SELECT 
@@ -100,7 +100,7 @@ exports.getDashboard = async (req, res) => {
             GROUP BY source
             ORDER BY total DESC
         `);
-        
+
         // Páginas mais visitadas
         const [topPages] = await pool.query(`
             SELECT 
@@ -113,7 +113,7 @@ exports.getDashboard = async (req, res) => {
             ORDER BY views DESC
             LIMIT 20
         `);
-        
+
         // Últimos visitantes
         const [recent] = await pool.query(`
             SELECT 
@@ -135,7 +135,7 @@ exports.getDashboard = async (req, res) => {
             ORDER BY v.last_visit DESC
             LIMIT 50
         `);
-        
+
         // Taxa de conversão (visitante → lead)
         const [conversion] = await pool.query(`
             SELECT 
@@ -145,7 +145,7 @@ exports.getDashboard = async (req, res) => {
             FROM visitors
             WHERE first_visit >= DATE_SUB(NOW(), INTERVAL ${interval})
         `);
-        
+
         res.json({
             summary: total[0],
             daily,
@@ -158,7 +158,7 @@ exports.getDashboard = async (req, res) => {
             recent,
             conversion: conversion[0]
         });
-        
+
     } catch (error) {
         console.error('Erro ao carregar dashboard:', error);
         res.status(500).json({ error: 'Erro ao carregar dashboard' });
@@ -171,29 +171,29 @@ exports.getDashboard = async (req, res) => {
 exports.getVisitorDetails = async (req, res) => {
     try {
         const { id } = req.params;
-        
+
         const [visitors] = await pool.query(`
             SELECT v.*, 
                    (SELECT COUNT(*) FROM visitor_pages WHERE visitor_id = v.id) as pages_visited
             FROM visitors v
             WHERE v.id = ?
         `, [id]);
-        
+
         if (visitors.length === 0) {
             return res.status(404).json({ error: 'Visitante não encontrado' });
         }
-        
+
         const [pages] = await pool.query(`
             SELECT * FROM visitor_pages
             WHERE visitor_id = ?
             ORDER BY visited_at DESC
         `, [id]);
-        
+
         res.json({
             visitor: visitors[0],
             pages
         });
-        
+
     } catch (error) {
         console.error('Erro ao buscar visitante:', error);
         res.status(500).json({ error: 'Erro ao buscar visitante' });
@@ -207,19 +207,19 @@ exports.convertToLead = async (req, res) => {
     const connection = await pool.getConnection();
     try {
         await connection.beginTransaction();
-        
+
         const { id } = req.params;
         const { lead_id } = req.body;
-        
+
         await connection.query(
             'UPDATE visitors SET converted = TRUE, lead_id = ? WHERE id = ?',
             [lead_id, id]
         );
-        
+
         await connection.commit();
-        
+
         res.json({ message: 'Visitante convertido em lead com sucesso' });
-        
+
     } catch (error) {
         await connection.rollback();
         console.error('Erro ao converter visitante:', error);
