@@ -59,6 +59,25 @@ const financialRoutes = require('./routes/financialRoutes');
 const maintenanceRoutes = require('./modules/maintenance/routes/maintenanceRoutes');
 
 app.use(trackVisitor);
+
+// =====================================================
+// ROTA DE TESTE DE TRACKING (PÚBLICA)
+// =====================================================
+app.get('/api/visitors/test-status', (req, res) => {
+    const consent = req.cookies?.tracking_consent;
+    const sessionId = req.cookies?.visitor_session;
+
+    res.json({
+        success: true,
+        tracking_active: consent === 'accepted',
+        consent_cookie: consent || 'não definido',
+        session_id: sessionId || 'não definido',
+        ip: req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress,
+        user_agent: req.headers['user-agent'],
+        message: 'Rota de teste funcionando!'
+    });
+});
+
 // Rotas públicas (ANTES do middleware de autenticação)
 app.use('/api/public', publicRoutes);
 app.use('/api/visitors', visitorRoutes);  // Rota pública para teste

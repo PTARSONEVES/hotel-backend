@@ -5,11 +5,12 @@ const authMiddleware = require('../../middleware/auth');
 const authorize = require('../../middleware/authorize');
 
 // Rota de teste pública (sem autenticação para diagnóstico)
+/*
 router.get('/test-status', async (req, res) => {
     try {
         const consent = req.cookies?.tracking_consent;
         const sessionId = req.cookies?.visitor_session;
-        
+
         res.json({
             success: true,
             tracking_active: consent === 'accepted',
@@ -22,7 +23,7 @@ router.get('/test-status', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-
+*/
 
 router.use(authMiddleware);
 router.use(authorize.minimumRole('admin'));
