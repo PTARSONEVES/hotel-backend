@@ -10,6 +10,7 @@ const app = express();
 // Configuração CORS (já existente)
 const allowedOrigins = [
     'http://localhost:5173',
+    'http://localhost:3000',
     'https://www.ancorarportodegalinhas.com',
     'https://ancorarportodegalinhas.com',
     'https://hotel-frontend-xi-five.vercel.app',
@@ -17,8 +18,21 @@ const allowedOrigins = [
 ];
 
 app.use(cors({
-    origin: allowedOrigins,
-    credentials: true
+    origin: function(origin, callback) {
+        // Permitir requisições sem origem (como apps mobile)
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.indexOf(origin) === -1) {
+            const msg = 'A política CORS para este site não permite acesso da origem: ' + origin;
+            console.log('🚫 Bloqueado:', origin);
+            return callback(new Error(msg), false);
+        }
+        console.log('✅ Permitido:', origin);
+        return callback(null, true);
+    },
+    credentials: true,  // Permite envio de cookies
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
 }));
 
 app.use(express.json());
