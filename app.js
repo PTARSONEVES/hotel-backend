@@ -45,26 +45,7 @@ app.use(trackVisitor);
 const visitorRoutes = require('./routes/admin/visitorRoutes');
 const publicRoutes = require('./routes/publicRoutes');
 
-
-// Rota de teste de tracking
-app.get('/api/visitors/test-status', (req, res) => {
-    const consent = req.cookies?.tracking_consent;
-    const sessionId = req.cookies?.visitor_session;
-
-    res.json({
-        success: true,
-        tracking_active: consent === 'accepted',
-        consent_cookie: consent || 'não definido',
-        session_id: sessionId || 'não definido',
-        ip: req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress,
-        user_agent: req.headers['user-agent'],
-        message: 'Rota de teste funcionando!'
-    });
-});
-
-
 app.use('/api/public', publicRoutes);
-app.use('/api/visitors', visitorRoutes);
 
 // =====================================================
 // ROTAS PROTEGIDAS
@@ -79,6 +60,7 @@ const financialRoutes = require('./routes/financialRoutes');
 const maintenanceRoutes = require('./modules/maintenance/routes/maintenanceRoutes');
 const chatbotController = require('./controllers/chatbotController');
 
+app.use('/api/admin/visitors', visitorRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/accounts', accountRoutes);
 app.use('/api/password', passwordRoutes);
