@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const cookieParser = require('cookie-parser');
 require('dotenv').config();
 
@@ -46,8 +45,6 @@ app.use(trackVisitor);
 const visitorRoutes = require('./routes/admin/visitorRoutes');
 const publicRoutes = require('./routes/publicRoutes');
 
-app.use('/api/public', publicRoutes);
-app.use('/api/visitors', visitorRoutes);
 
 // Rota de teste de tracking
 app.get('/api/visitors/test-status', (req, res) => {
@@ -64,6 +61,10 @@ app.get('/api/visitors/test-status', (req, res) => {
         message: 'Rota de teste funcionando!'
     });
 });
+
+
+app.use('/api/public', publicRoutes);
+app.use('/api/visitors', visitorRoutes);
 
 // =====================================================
 // ROTAS PROTEGIDAS
