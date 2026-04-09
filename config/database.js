@@ -3,8 +3,7 @@ require('dotenv').config();
 
 let pool;
 
-// Função para criar pool
-function createPool() {
+async function createPool() {
     const baseConfig = {
         waitForConnections: true,
         connectionLimit: 5,
@@ -15,29 +14,30 @@ function createPool() {
 
     if (process.env.NODE_ENV === 'production') {
         console.log('🔌 Conectando ao Aiven MySQL...');
-
-        // Configuração para Aiven (requer SSL)
-        const config = {
-            host: process.env.DB_HOST,
-            port: parseInt(process.env.DB_PORT),
-            user: process.env.DB_USER,
-            password: process.env.DB_PASSWORD,
-            database: process.env.DB_NAME,
-            ssl: {
-                rejectUnauthorized: true,
-                ca: process.env.DB_CA_CERT
-            },
-            ...baseConfig
-        };
-
-        console.log(`📡 Host: ${config.host}:${config.port}`);
-        console.log(`📡 Database: ${config.database}`);
-        console.log(`📡 User: ${config.user}`);
         
-        return mysql.createPool(config);
+        // Usar DATABASE_URL se disponível
+        if (process.env.DATABASE_URL) {
+            console.log('📡 Usando DATABASE_URL');
+            pool = mysql.createPool({
+                uri: process.env.DATABASE_URL,
+                ...baseConfig
+            });
+        } else {
+            // Fallback para variáveis individuais
+            console.log('📡 Usando variáveis individuais');
+            pool = mysql.createPool({
+                host: process.env.DB_HOST,
+                port: parseInt(process.env.DB_PORT),
+                user: process.env.DB_USER,
+                password: process.env.DB_PASSWORD,
+                database: process.env.DB_NAME,
+                ssl: { rejectUnauthorized: false }, // Ignora certificado para teste
+                ...baseConfig
+            });
+        }
     } else {
         console.log('💻 Conectando ao MySQL local...');
-        return mysql.createPool({
+        pool = mysql.createPool({
             host: 'localhost',
             user: 'root',
             password: process.env.DB_PASSWORD || '',
@@ -45,19 +45,21 @@ function createPool() {
             ...baseConfig
         });
     }
+
+    // Testar conexão
+    try {
+        const conn = await pool.getConnection();
+        console.log('✅ Banco conectado!');
+        conn.release();
+    } catch (err) {
+        console.error('❌ Erro na conexão:', err.message);
+        throw err;
+    }
+
+    return pool;
 }
 
-pool = createPool();
-
-// Testar conexão
-pool.getConnection()
-    .then(conn => {
-        console.log('✅ Pool de conexões OK');
-        conn.release();
-    })
-    .catch(err => {
-        console.error('❌ Erro no pool:', err.message);
-        console.error('Detalhes:', err);
-    });
+// Inicializar
+createPool().catch(console.error);
 
 module.exports = pool;
