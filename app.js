@@ -89,6 +89,10 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT}`);
 });
+// Log das variáveis de ambiente (não mostre a senha!)
+console.log('📡 NODE_ENV:', process.env.NODE_ENV);
+console.log('📡 DATABASE_URL definida:', process.env.DATABASE_URL ? 'Sim' : 'Não');
+console.log('📡 DB_HOST definido:', process.env.DB_HOST ? 'Sim' : 'Não');
 
 // Iniciar cron jobs
 require('./cron/alerts');
