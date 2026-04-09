@@ -5,7 +5,7 @@ let pool;
 
 function createPool() {
     if (process.env.NODE_ENV === 'production') {
-        console.log('🔌 Conectando ao Railway...');
+        console.log('🔌 Conectando ao Aiven...');
 
         if (process.env.DATABASE_URL) {
             pool = mysql.createPool(process.env.DATABASE_URL);
