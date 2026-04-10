@@ -21,24 +21,23 @@ async function initializePool() {
         }
         return pool;
     }
-    
+
     initializing = true;
-    
+
     try {
         if (process.env.NODE_ENV === 'production' && process.env.DATABASE_URL) {
             console.log('🚀 Conectando ao banco de dados de PRODUÇÃO');
-            
+
             let cleanUrl = process.env.DATABASE_URL;
             cleanUrl = cleanUrl.replace(/\?ssl-mode=REQUIRED/, '?ssl=true');
             cleanUrl = cleanUrl.replace(/&ssl-mode=REQUIRED/, '&ssl=true');
-            
+
             pool = mysql.createPool({
                 uri: cleanUrl,
                 ssl: { rejectUnauthorized: false },
                 ...baseConfig
             });
-        } 
-        else if (process.env.NODE_ENV !== 'production') {
+        } else if (process.env.NODE_ENV !== 'production') {
             console.log('💻 Conectando ao MySQL local');
             pool = mysql.createPool({
                 host: 'localhost',
