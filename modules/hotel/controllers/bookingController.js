@@ -291,73 +291,121 @@ exports.updateBooking = async (req, res) => {
     const connection = await pool.getConnection();
     try {
         await connection.beginTransaction();
-
+        
         const { id } = req.params;
         const {
+            guest_id,
+            room_id,
             check_in,
             check_out,
             adults,
             children,
             total_amount,
-            observations
+            observations,
+            status,
+            payment_status
         } = req.body;
-
+        
+        console.log('📝 Atualizando reserva:', { id, guest_id, room_id, check_in, check_out });
+        
         // Verificar se a reserva existe
         const [existing] = await connection.query(
-            'SELECT room_id, status FROM bookings WHERE id = ?',
+            'SELECT * FROM bookings WHERE id = ?',
             [id]
         );
-
+        
         if (existing.length === 0) {
             await connection.rollback();
             return res.status(404).json({ error: 'Reserva não encontrada' });
         }
-
-        const booking = existing[0];
-
-        // Se as datas mudaram, verificar disponibilidade novamente
-        if (check_in || check_out) {
-            const newCheckIn = check_in || booking.check_in;
-            const newCheckOut = check_out || booking.check_out;
-
+        
+        const oldBooking = existing[0];
+        
+        // Se o apartamento mudou, verificar disponibilidade
+        if (room_id && room_id !== oldBooking.room_id) {
+            const newCheckIn = check_in || oldBooking.check_in;
+            const newCheckOut = check_out || oldBooking.check_out;
+            
             const [conflicts] = await connection.query(
                 `SELECT id FROM bookings
                  WHERE room_id = ?
                  AND id != ?
                  AND status IN ('reservado', 'confirmado', 'checkin')
                  AND NOT (check_out <= ? OR check_in >= ?)`,
-                [booking.room_id, id, newCheckIn, newCheckOut]
+                [room_id, id, newCheckIn, newCheckOut]
             );
-
+            
             if (conflicts.length > 0) {
                 await connection.rollback();
-                return res.status(400).json({ error: 'Período não disponível' });
+                return res.status(400).json({ error: 'Apartamento não disponível para o período' });
             }
         }
-
+        
         // Atualizar reserva
         await connection.query(
             `UPDATE bookings 
-             SET check_in = COALESCE(?, check_in),
+             SET guest_id = COALESCE(?, guest_id),
+                 room_id = COALESCE(?, room_id),
+                 check_in = COALESCE(?, check_in),
                  check_out = COALESCE(?, check_out),
                  adults = COALESCE(?, adults),
                  children = COALESCE(?, children),
                  total_amount = COALESCE(?, total_amount),
-                 observations = COALESCE(?, observations)
+                 observations = COALESCE(?, observations),
+                 status = COALESCE(?, status),
+                 payment_status = COALESCE(?, payment_status),
+                 updated_at = NOW()
              WHERE id = ?`,
-            [check_in, check_out, adults, children, total_amount, observations, id]
+            [
+                guest_id, room_id, check_in, check_out, 
+                adults, children, total_amount, observations, 
+                status, payment_status, id
+            ]
         );
-
+        
+        // Registrar log da alteração
+        await connection.query(
+            `INSERT INTO booking_logs 
+             (booking_id, user_id, action, details, created_at)
+             VALUES (?, ?, 'update', ?, NOW())`,
+            [id, req.userId, JSON.stringify({ old: oldBooking, new: req.body })]
+        );
+        
         await connection.commit();
-
-        res.json({ message: 'Reserva atualizada com sucesso' });
-
+        
+        res.json({ 
+            message: 'Reserva atualizada com sucesso',
+            updated_by: req.user?.name || req.user?.email
+        });
+        
     } catch (error) {
         await connection.rollback();
-        console.error('Erro ao atualizar reserva:', error);
-        res.status(500).json({ error: 'Erro ao atualizar reserva' });
+        console.error('❌ Erro ao atualizar reserva:', error);
+        res.status(500).json({ error: 'Erro ao atualizar reserva: ' + error.message });
     } finally {
         connection.release();
+    }
+};
+
+// =====================================================
+// LOGS DA RESERVA (para auditoria)
+// =====================================================
+exports.getBookingLogs = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const [logs] = await pool.query(`
+            SELECT bl.*, u.name as user_name
+            FROM booking_logs bl
+            LEFT JOIN users u ON bl.user_id = u.id
+            WHERE bl.booking_id = ?
+            ORDER BY bl.created_at DESC
+        `, [id]);
+        
+        res.json(logs);
+    } catch (error) {
+        console.error('Erro ao buscar logs:', error);
+        res.status(500).json({ error: 'Erro ao buscar logs' });
     }
 };
 

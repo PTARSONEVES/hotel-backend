@@ -89,3 +89,20 @@ exports.isSelfOrAdmin = (paramName = 'id') => {
         }
     };
 };
+// Verificar se o usuário tem permissão para editar reservas
+exports.canEditBookings = (req, res, next) => {
+    if (!req.user) {
+        return res.status(401).json({ error: 'Usuário não autenticado' });
+    }
+    
+    const allowedRoles = ['admin', 'colaborador'];
+    const hasPermission = allowedRoles.includes(req.user.role);
+    
+    if (hasPermission) {
+        next();
+    } else {
+        res.status(403).json({ 
+            error: 'Acesso negado. Apenas administradores e colaboradores podem editar reservas.' 
+        });
+    }
+};

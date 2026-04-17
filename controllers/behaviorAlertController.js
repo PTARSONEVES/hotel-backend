@@ -145,7 +145,7 @@ exports.getAlerts = async (req, res) => {
         const params = [];
         
         if (unread_only === 'true') {
-            query += ' AND a.read = FALSE';
+            query += ' AND a.`read` = FALSE';
         }
         if (severity) {
             query += ' AND a.severity = ?';
@@ -161,7 +161,7 @@ exports.getAlerts = async (req, res) => {
         const [alerts] = await pool.query(query, params);
         
         const [unreadCount] = await pool.query(
-            'SELECT COUNT(*) as total FROM behavior_alerts WHERE read = FALSE'
+            'SELECT COUNT(*) as total FROM behavior_alerts WHERE `read` = FALSE'
         );
         
         res.json({
@@ -183,7 +183,7 @@ exports.markAsRead = async (req, res) => {
         const { id } = req.params;
         
         await pool.query(
-            'UPDATE behavior_alerts SET read = TRUE WHERE id = ?',
+            'UPDATE behavior_alerts SET `read` = TRUE WHERE id = ?',
             [id]
         );
         
@@ -200,7 +200,7 @@ exports.markAsRead = async (req, res) => {
 // =====================================================
 exports.markAllAsRead = async (req, res) => {
     try {
-        await pool.query('UPDATE behavior_alerts SET read = TRUE WHERE read = FALSE');
+        await pool.query('UPDATE behavior_alerts SET `read` = TRUE WHERE `read` = FALSE');
         res.json({ message: 'Todos alertas marcados como lidos' });
         
     } catch (error) {

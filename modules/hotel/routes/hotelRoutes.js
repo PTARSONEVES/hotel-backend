@@ -17,6 +17,7 @@ router.use(authMiddleware);
 // ROTAS DE TIPOS DE APARTAMENTO
 // =====================================================
 router.get('/room-types', roomTypeController.getRoomTypes);
+router.get('/room-types/:id', roomTypeController.getRoomTypeById);
 router.post('/room-types', roomTypeController.createRoomType);
 router.put('/room-types/:id', roomTypeController.updateRoomType);
 router.delete('/room-types/:id', roomTypeController.deleteRoomType);
@@ -31,6 +32,7 @@ router.post('/rooms', roomController.createRoom);
 router.put('/rooms/:id', roomController.updateRoom);
 router.patch('/rooms/:id/status', roomController.updateStatus);
 router.delete('/rooms/:id', roomController.deleteRoom);
+router.get('/rooms/by-code/:code', roomController.getRoomByCode);
 
 // =====================================================
 // ROTAS DE HÓSPEDES
@@ -50,8 +52,10 @@ router.get('/by-code/:code', guestController.getGuestByOperationCode);
 router.get('/bookings/availability', bookingController.checkAvailability);  // <-- DEVE VIR ANTES DE /bookings/:id
 router.get('/bookings', bookingController.getBookings);  // <-- DEVE ESTAR ASSIM
 router.get('/bookings/:id', bookingController.getBookingById);
+router.get('/bookings/:id/logs', authorize.canEditBookings, bookingController.getBookingLogs);
 router.get('/bookings/by-code/:code', bookingController.getBookingByCode);
 router.post('/bookings', bookingController.createBooking);
+router.put('/bookings/:id', authorize.canEditBookings, bookingController.updateBooking);  // <-- PROTEÇÃO
 router.post('/bookings/:id/checkin', bookingController.checkIn);
 router.post('/bookings/:id/checkout', bookingController.checkOut);
 router.post('/bookings/:id/cancel', bookingController.cancelBooking);

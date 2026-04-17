@@ -1,9 +1,28 @@
 const pool = require('../../../config/database');
+const { registerOperation } = require('../../../utils/codeGenerator');
 
 // Listar todos os apartamentos
 exports.getRooms = async (req, res) => {
     try {
-        const [rooms] = await pool.query('SELECT * FROM vw_room_occupancy');
+        const [rooms] = await pool.query(`
+            SELECT r.*, 
+                   rt.name as room_type_name,
+                   CASE 
+                       WHEN b.id IS NOT NULL THEN 'ocupado'
+                       ELSE r.status
+                   END as current_status,
+                   g.name as current_guest,
+                   b.check_out,
+                   (SELECT COUNT(*) FROM work_orders WHERE room_id = r.id AND status IN ('aberta', 'em_andamento')) as open_orders
+            FROM rooms r
+            LEFT JOIN room_types rt ON r.room_type_id = rt.id
+            LEFT JOIN bookings b ON r.id = b.room_id 
+                AND b.status = 'checkin'
+                AND CURDATE() BETWEEN b.check_in AND b.check_out
+            LEFT JOIN guests g ON b.guest_id = g.id
+            ORDER BY r.block, r.room_number
+        `);
+        
         res.json(rooms);
     } catch (error) {
         console.error('Erro ao buscar apartamentos:', error);
@@ -44,23 +63,55 @@ exports.getRoomMap = async (req, res) => {
 exports.getRoomById = async (req, res) => {
     try {
         const { id } = req.params;
-        const [rooms] = await pool.query('SELECT * FROM vw_room_occupancy WHERE id = ?', [id]);
+        
+        const [rooms] = await pool.query(`
+            SELECT r.*, rt.name as room_type_name, rt.capacity, rt.size_sqm
+            FROM rooms r
+            LEFT JOIN room_types rt ON r.room_type_id = rt.id
+            WHERE r.id = ?
+        `, [id]);
         
         if (rooms.length === 0) {
             return res.status(404).json({ error: 'Apartamento não encontrado' });
         }
         
-        res.json(rooms[0]);
+        // Buscar histórico de manutenção
+        const [maintenance] = await pool.query(`
+            SELECT wo.*, u.name as technician_name
+            FROM work_orders wo
+            LEFT JOIN users u ON wo.assigned_to = u.id
+            WHERE wo.room_id = ?
+            ORDER BY wo.created_at DESC
+            LIMIT 10
+        `, [id]);
+        
+        res.json({
+            ...rooms[0],
+            maintenance_history: maintenance
+        });
+        
     } catch (error) {
         console.error('Erro ao buscar apartamento:', error);
         res.status(500).json({ error: 'Erro ao buscar apartamento' });
     }
 };
 
-// Criar novo apartamento
+// =====================================================
+// CRIAR APARTAMENTO (COM CÓDIGO DE OPERAÇÃO)
+// =====================================================
 exports.createRoom = async (req, res) => {
     try {
-        const { room_number, floor, room_type_id, observations } = req.body;
+        const {
+            room_number,
+            floor,
+            room_type_id,
+            block,
+            ownership,
+            observations,
+            maintenance_notes
+        } = req.body;
+        
+        console.log('📝 Criando apartamento:', { room_number, floor, block });
         
         // Verificar se número já existe
         const [existing] = await pool.query(
@@ -73,25 +124,58 @@ exports.createRoom = async (req, res) => {
         }
         
         const [result] = await pool.query(
-            'INSERT INTO rooms (room_number, floor, room_type_id, observations) VALUES (?, ?, ?, ?)',
-            [room_number, floor, room_type_id, observations]
+            `INSERT INTO rooms 
+             (room_number, floor, room_type_id, block, ownership, observations, maintenance_notes, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'disponivel')`,
+            [room_number, floor, room_type_id, block || null, ownership || 'proprio', observations || null, maintenance_notes || null]
         );
         
+        const roomId = result.insertId;
+        
+        // =====================================================
+        // GERAR CÓDIGO DE OPERAÇÃO
+        // =====================================================
+        let operationCode = null;
+        try {
+            operationCode = await registerOperation('rooms', roomId, pool);
+            await pool.query(
+                'UPDATE rooms SET operation_code = ? WHERE id = ?',
+                [operationCode, roomId]
+            );
+            console.log(`✅ Código gerado para apartamento: ${operationCode}`);
+        } catch (error) {
+            console.error('❌ Erro ao gerar código:', error);
+            // Não impede a criação do apartamento
+        }
+        
         res.status(201).json({ 
-            id: result.insertId,
+            id: roomId,
+            operationCode,
             message: 'Apartamento criado com sucesso' 
         });
+        
     } catch (error) {
         console.error('Erro ao criar apartamento:', error);
         res.status(500).json({ error: 'Erro ao criar apartamento' });
     }
 };
 
-// Atualizar apartamento
+// =====================================================
+// ATUALIZAR APARTAMENTO
+// =====================================================
 exports.updateRoom = async (req, res) => {
     try {
         const { id } = req.params;
-        const { room_number, floor, room_type_id, status, observations } = req.body;
+        const {
+            room_number,
+            floor,
+            room_type_id,
+            block,
+            ownership,
+            status,
+            observations,
+            maintenance_notes
+        } = req.body;
         
         // Verificar se número já existe (exceto o próprio)
         const [existing] = await pool.query(
@@ -105,15 +189,44 @@ exports.updateRoom = async (req, res) => {
         
         await pool.query(
             `UPDATE rooms 
-             SET room_number = ?, floor = ?, room_type_id = ?, status = ?, observations = ?
+             SET room_number = ?, floor = ?, room_type_id = ?, block = ?, 
+                 ownership = ?, status = ?, observations = ?, maintenance_notes = ?
              WHERE id = ?`,
-            [room_number, floor, room_type_id, status, observations, id]
+            [room_number, floor, room_type_id, block || null, ownership || 'proprio', 
+             status, observations || null, maintenance_notes || null, id]
         );
         
         res.json({ message: 'Apartamento atualizado com sucesso' });
+        
     } catch (error) {
         console.error('Erro ao atualizar apartamento:', error);
         res.status(500).json({ error: 'Erro ao atualizar apartamento' });
+    }
+};
+
+// =====================================================
+// BUSCAR APARTAMENTO POR CÓDIGO (adicional)
+// =====================================================
+exports.getRoomByCode = async (req, res) => {
+    try {
+        const { code } = req.params;
+        
+        const [rooms] = await pool.query(`
+            SELECT r.*, rt.name as room_type_name
+            FROM rooms r
+            LEFT JOIN room_types rt ON r.room_type_id = rt.id
+            WHERE r.operation_code = ?
+        `, [code]);
+        
+        if (rooms.length === 0) {
+            return res.status(404).json({ error: 'Apartamento não encontrado' });
+        }
+        
+        res.json(rooms[0]);
+        
+    } catch (error) {
+        console.error('Erro ao buscar apartamento por código:', error);
+        res.status(500).json({ error: 'Erro ao buscar apartamento' });
     }
 };
 
